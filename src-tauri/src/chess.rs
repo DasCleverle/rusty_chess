@@ -121,15 +121,13 @@ pub enum Piece {
     WhitePawn,
 }
 
-#[derive(Copy, Clone, Serialize)]
+#[derive(Copy, Clone, Serialize, Deserialize)]
 pub struct Move {
     pub from: Coord,
     pub to: Coord,
-    pub piece: Piece,
-    pub takes: Option<Piece>,
+    pub takes: bool,
 }
 
-#[derive(Copy, Clone)]
 pub struct Board {
     pieces: [Option<Piece>; 64],
 }
@@ -206,8 +204,7 @@ impl Board {
                             moves.push(Move {
                                 from,
                                 to,
-                                piece,
-                                takes: None,
+                                takes: false,
                             });
                         }
                     }
@@ -218,18 +215,32 @@ impl Board {
                                 moves.push(Move {
                                     from,
                                     to,
-                                    piece,
-                                    takes: None,
+                                    takes: false,
                                 });
                             }
                         }
                     }
 
                     return moves;
-                },
+                }
                 _ => Vec::new(),
             }
         });
     }
 
+    pub fn exec_move(&mut self, mv: Move) -> Result<(), String> {
+        let from_offset = mv.from.to_offset();
+
+        return match self.pieces[from_offset] {
+            None => Err(format!("No piece at {}", mv.from)),
+            Some(piece) => {
+                let to_offset = mv.to.to_offset();
+
+                self.pieces[from_offset] = None;
+                self.pieces[to_offset] = Some(piece);
+
+                return Ok(());
+            }
+        };
+    }
 }
