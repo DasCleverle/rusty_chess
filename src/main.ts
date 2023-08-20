@@ -2,6 +2,8 @@ import type { Event } from '@tauri-apps/api/event';
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from '@tauri-apps/api/tauri';
 
+type Coord = string;
+
 type Piece =
     | 'BlackRook'
     | 'BlackKnight'
@@ -18,6 +20,31 @@ type Piece =
 
 interface BoardPayload {
     pieces: Piece[];
+}
+
+interface Move {
+    from: Coord;
+    to: Coord;
+    piece: Piece;
+    takes?: Piece;
+}
+
+class State {
+    isMoving: boolean = false;
+    coord?: string;
+    moves?: Move[];
+
+    set(coord: string, moves: Move[]) {
+        this.coord = coord;
+        this.moves = moves;
+        this.isMoving = true;
+    }
+
+    reset() {
+        this.isMoving = false;
+        this.coord = undefined;
+        this.moves = undefined;
+    }
 }
 
 function toCoord(offset: number) {
@@ -65,13 +92,69 @@ function updateBoard(board: BoardPayload) {
     }
 }
 
+async function getBoard(): Promise<BoardPayload> {
+    return await invoke<BoardPayload>('get_board');
+}
 
-// await listen('board-update', (event: Event<BoardPayload>) => {
-//     updateBoard(event.payload);
-//});
+async function getAvailableMoves(coord: Coord) {
+    return await invoke<Move[]>('get_available_moves', { coord });
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('getting board');
-    const board: BoardPayload = await invoke('get_board');
-    updateBoard(board);
+    updateBoard(await getBoard());
+
+    let state: State = new State();
+
+    const squares = document.getElementsByClassName('square');
+
+    function resetHighlights() {
+        for (let square of squares) {
+            square.classList.remove('to');
+            square.classList.remove('from');
+        }
+    }
+
+    for (let square of squares) {
+        const coord = square.id;
+
+        square.addEventListener('click', async function() {
+            let moves: Move[] | null = null;
+
+            if (state.isMoving) {
+                if (state.coord === coord) {
+                    resetHighlights();
+                    state.reset();
+                    return;
+                }
+                else {
+                    moves = await getAvailableMoves(coord);
+
+                    if (moves.length === 0) {
+                        return;
+                    }
+
+                }
+            }
+
+            resetHighlights();
+
+            if (!moves) {
+                moves = await getAvailableMoves(coord);
+            }
+
+            if (moves.length === 0) {
+                return;
+            }
+
+            state.set(coord, moves);
+
+            square.classList.add('from');
+
+            for (let move of moves) {
+                const to = squares.namedItem(move.to)!;
+                to.classList.add('to');
+            }
+        })
+    }
 });
+

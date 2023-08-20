@@ -52,6 +52,14 @@
     height: 65px;
 }
 
+.to {
+    background-color: #059bf2 !important;
+}
+
+.from {
+    background-color: #012d91 !important;
+}
+
 .row:nth-child(even) .square:nth-child(even) {
     background-color: #ffce9e;
 }
