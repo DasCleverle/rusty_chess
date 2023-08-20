@@ -25,7 +25,6 @@ interface BoardPayload {
 interface Move {
     from: Coord;
     to: Coord;
-    piece: Piece;
     takes?: Piece;
 }
 
@@ -71,8 +70,8 @@ function getImageName(piece: Piece) {
     return str;
 }
 
-function updateBoard(board: BoardPayload) {
-    const pieces = board.pieces;
+async function updateBoard() {
+    const pieces = (await getBoard()).pieces;
 
     for (let i = 0; i < pieces.length; i++) {
         const piece = pieces[i];
@@ -100,8 +99,12 @@ async function getAvailableMoves(coord: Coord) {
     return await invoke<Move[]>('get_available_moves', { coord });
 }
 
+async function executeMove(move: Move) {
+    return await invoke<Move[]>('exec_move', { mv: move });
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
-    updateBoard(await getBoard());
+    await updateBoard();
 
     let state: State = new State();
 
@@ -127,12 +130,23 @@ document.addEventListener('DOMContentLoaded', async () => {
                     return;
                 }
                 else {
-                    moves = await getAvailableMoves(coord);
+                    const move = state.moves?.find(m => m.to == coord);
 
-                    if (moves.length === 0) {
+                    if (move) {
+                        await executeMove(move);
+                        await updateBoard();
+                        state.reset();
+                        resetHighlights();
+
                         return;
                     }
+                    else {
+                        moves = await getAvailableMoves(coord);
 
+                        if (moves.length === 0) {
+                            return;
+                        }
+                    }
                 }
             }
 
