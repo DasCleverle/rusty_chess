@@ -3,51 +3,46 @@
 
 mod chess;
 
-use std::error::Error;
-
+use chess::{Board, Coord, Move, Piece};
 use serde::Serialize;
-use tauri::{App, Wry, Manager, Window, PageLoadPayload};
-
-use crate::chess::{Board, Piece};
+use tauri::State;
 
 #[derive(Serialize, Clone)]
 struct BoardPayload {
-    pieces: Vec<Option<Piece>>
+    pieces: Vec<Option<Piece>>,
+}
+
+struct BoardState {
+    board: Board,
 }
 
 impl From<Board> for BoardPayload {
     fn from(value: Board) -> Self {
-        let pieces = Vec::from(value.pieces);
+        let pieces = Vec::from(value.pieces());
         return BoardPayload { pieces };
     }
 }
 
-fn init(app: &mut App<Wry>) -> Result<(), Box<dyn Error>> {
-    return Ok(());
-}
-
-fn handle_page_load(window: Window<Wry>, _payload: PageLoadPayload) {
-    let board: Board = Board::new_game();
-    let payload: BoardPayload = board.into();
-
-    println!("emitting board-update");
-    window.emit_all("board-update", payload).expect("emit to be successful");
+#[tauri::command]
+fn get_board(state: State<BoardState>) -> BoardPayload {
+    return state.inner().board.into();
 }
 
 #[tauri::command]
-fn get_board() -> BoardPayload {
-    println!("getting board");
-    let board: Board = Board::new_game();
-    let payload: BoardPayload = board.into();
-
-    return payload;
+fn get_available_moves(coord: Coord, state: State<BoardState>) -> Vec<Move> {
+    match state.inner().board.get_available_moves(coord) {
+        Some(moves) => moves,
+        None => Vec::new(),
+    }
 }
 
 fn main() {
+    let board = Board::new_game();
+    let state = BoardState { board };
+
     tauri::Builder::default()
-        .setup(init)
-        .invoke_handler(tauri::generate_handler![get_board])
-        .on_page_load(handle_page_load)
+        .manage(state)
+        .invoke_handler(tauri::generate_handler![get_board, get_available_moves])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
