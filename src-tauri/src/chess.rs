@@ -125,7 +125,6 @@ pub enum Piece {
 pub struct Move {
     pub from: Coord,
     pub to: Coord,
-    pub takes: bool,
 }
 
 pub struct Board {
@@ -204,7 +203,6 @@ impl Board {
                             moves.push(Move {
                                 from,
                                 to,
-                                takes: false,
                             });
                         }
                     }
@@ -215,7 +213,6 @@ impl Board {
                                 moves.push(Move {
                                     from,
                                     to,
-                                    takes: false,
                                 });
                             }
                         }
