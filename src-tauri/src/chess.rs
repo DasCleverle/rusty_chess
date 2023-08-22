@@ -104,34 +104,38 @@ impl<'de> Deserialize<'de> for Coord {
     }
 }
 
-#[derive(Debug, Copy, Clone, Serialize, strum_macros::IntoStaticStr, strum_macros::Display)]
+#[derive(Debug, Copy, Clone, PartialEq, Serialize, strum_macros::IntoStaticStr, strum_macros::Display)]
 pub enum Color {
     White,
     Black,
 }
 
 #[derive(Debug, Copy, Clone, strum_macros::IntoStaticStr)]
-pub enum Piece {
-    Rook(Color),
-    Knight(Color),
-    Bishop(Color),
-    Queen(Color),
-    King(Color),
-    Pawn(Color),
+pub enum PieceType {
+    Rook,
+    Knight,
+    Bishop,
+    Queen,
+    King,
+    Pawn,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct Piece {
+    piece_type: PieceType,
+    color: Color
+}
+
+impl Piece {
+    pub fn new(piece_type: PieceType, color: Color) -> Self {
+        Self { piece_type, color }
+    }
 }
 
 impl Display for Piece {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Piece::Rook(c) => f.write_str(c.into())?,
-            Piece::Knight(c) => f.write_str(c.into())?,
-            Piece::Bishop(c) => f.write_str(c.into())?,
-            Piece::Queen(c) => f.write_str(c.into())?,
-            Piece::King(c) => f.write_str(c.into())?,
-            Piece::Pawn(c) => f.write_str(c.into())?,
-        }
-
-        f.write_str(self.into())
+        f.write_str(self.color.into())?;
+        f.write_str(self.piece_type.into())
     }
 }
 
@@ -158,41 +162,41 @@ impl Board {
     pub fn new_game() -> Board {
         let mut board = Board { pieces: [None; 64] };
 
-        board.set(Coord::new('a', 1), Piece::Rook(Color::White));
-        board.set(Coord::new('b', 1), Piece::Knight(Color::White));
-        board.set(Coord::new('c', 1), Piece::Bishop(Color::White));
-        board.set(Coord::new('d', 1), Piece::Queen(Color::White));
-        board.set(Coord::new('e', 1), Piece::King(Color::White));
-        board.set(Coord::new('f', 1), Piece::Bishop(Color::White));
-        board.set(Coord::new('g', 1), Piece::Knight(Color::White));
-        board.set(Coord::new('h', 1), Piece::Rook(Color::White));
+        board.set(Coord::new('a', 1), Piece::new(PieceType::Rook, Color::White));
+        board.set(Coord::new('b', 1), Piece::new(PieceType::Knight, Color::White));
+        board.set(Coord::new('c', 1), Piece::new(PieceType::Bishop, Color::White));
+        board.set(Coord::new('d', 1), Piece::new(PieceType::Queen, Color::White));
+        board.set(Coord::new('e', 1), Piece::new(PieceType::King, Color::White));
+        board.set(Coord::new('f', 1), Piece::new(PieceType::Bishop, Color::White));
+        board.set(Coord::new('g', 1), Piece::new(PieceType::Knight, Color::White));
+        board.set(Coord::new('h', 1), Piece::new(PieceType::Rook, Color::White));
 
-        board.set(Coord::new('a', 2), Piece::Pawn(Color::White));
-        board.set(Coord::new('b', 2), Piece::Pawn(Color::White));
-        board.set(Coord::new('c', 2), Piece::Pawn(Color::White));
-        board.set(Coord::new('d', 2), Piece::Pawn(Color::White));
-        board.set(Coord::new('e', 2), Piece::Pawn(Color::White));
-        board.set(Coord::new('f', 2), Piece::Pawn(Color::White));
-        board.set(Coord::new('g', 2), Piece::Pawn(Color::White));
-        board.set(Coord::new('h', 2), Piece::Pawn(Color::White));
+        board.set(Coord::new('a', 2), Piece::new(PieceType::Pawn, Color::White));
+        board.set(Coord::new('b', 2), Piece::new(PieceType::Pawn, Color::White));
+        board.set(Coord::new('c', 2), Piece::new(PieceType::Pawn, Color::White));
+        board.set(Coord::new('d', 2), Piece::new(PieceType::Pawn, Color::White));
+        board.set(Coord::new('e', 2), Piece::new(PieceType::Pawn, Color::White));
+        board.set(Coord::new('f', 2), Piece::new(PieceType::Pawn, Color::White));
+        board.set(Coord::new('g', 2), Piece::new(PieceType::Pawn, Color::White));
+        board.set(Coord::new('h', 2), Piece::new(PieceType::Pawn, Color::White));
 
-        board.set(Coord::new('a', 7), Piece::Pawn(Color::Black));
-        board.set(Coord::new('b', 7), Piece::Pawn(Color::Black));
-        board.set(Coord::new('c', 7), Piece::Pawn(Color::Black));
-        board.set(Coord::new('d', 7), Piece::Pawn(Color::Black));
-        board.set(Coord::new('e', 7), Piece::Pawn(Color::Black));
-        board.set(Coord::new('f', 7), Piece::Pawn(Color::Black));
-        board.set(Coord::new('g', 7), Piece::Pawn(Color::Black));
-        board.set(Coord::new('h', 7), Piece::Pawn(Color::Black));
+        board.set(Coord::new('a', 7), Piece::new(PieceType::Pawn, Color::Black));
+        board.set(Coord::new('b', 7), Piece::new(PieceType::Pawn, Color::Black));
+        board.set(Coord::new('c', 7), Piece::new(PieceType::Pawn, Color::Black));
+        board.set(Coord::new('d', 7), Piece::new(PieceType::Pawn, Color::Black));
+        board.set(Coord::new('e', 7), Piece::new(PieceType::Pawn, Color::Black));
+        board.set(Coord::new('f', 7), Piece::new(PieceType::Pawn, Color::Black));
+        board.set(Coord::new('g', 7), Piece::new(PieceType::Pawn, Color::Black));
+        board.set(Coord::new('h', 7), Piece::new(PieceType::Pawn, Color::Black));
 
-        board.set(Coord::new('a', 8), Piece::Rook(Color::Black));
-        board.set(Coord::new('b', 8), Piece::Knight(Color::Black));
-        board.set(Coord::new('c', 8), Piece::Bishop(Color::Black));
-        board.set(Coord::new('d', 8), Piece::Queen(Color::Black));
-        board.set(Coord::new('e', 8), Piece::King(Color::Black));
-        board.set(Coord::new('f', 8), Piece::Bishop(Color::Black));
-        board.set(Coord::new('g', 8), Piece::Knight(Color::Black));
-        board.set(Coord::new('h', 8), Piece::Rook(Color::Black));
+        board.set(Coord::new('a', 8), Piece::new(PieceType::Rook, Color::Black));
+        board.set(Coord::new('b', 8), Piece::new(PieceType::Knight, Color::Black));
+        board.set(Coord::new('c', 8), Piece::new(PieceType::Bishop, Color::Black));
+        board.set(Coord::new('d', 8), Piece::new(PieceType::Queen, Color::Black));
+        board.set(Coord::new('e', 8), Piece::new(PieceType::King, Color::Black));
+        board.set(Coord::new('f', 8), Piece::new(PieceType::Bishop, Color::Black));
+        board.set(Coord::new('g', 8), Piece::new(PieceType::Knight, Color::Black));
+        board.set(Coord::new('h', 8), Piece::new(PieceType::Rook, Color::Black));
 
         return board;
     }
@@ -201,22 +205,15 @@ impl Board {
         self.pieces[coord.to_offset()] = Some(piece);
     }
 
-    fn peek(&self, coord: Coord) -> (Option<Piece>, Coord) {
-        let result = (self.pieces[coord.to_offset()], coord);
-        dbg!(result);
-
-        return result;
-    }
-
-    fn peek_translated(&self, coord: Coord, x: i8, y: i8) -> Option<(Option<Piece>, Coord)> {
-        return coord.translate(x, y).map(|c| (self.peek(c).0, c));
+    fn peek(&self, coord: Coord) -> Option<Piece> {
+        return self.pieces[coord.to_offset()];
     }
 
     pub fn pieces(&self) -> [Option<Piece>; 64] {
         return self.pieces;
     }
 
-    fn walk<X, Y>(&self, moves: &mut Vec<Move>, from: Coord, get_x: X, get_y: Y) -> ()
+    fn walk<X, Y>(&self, moves: &mut Vec<Move>, piece: Piece, from: Coord, get_x: X, get_y: Y, allow_taking: bool) -> ()
     where
         X: Fn(i8) -> Option<i8>,
         Y: Fn(i8) -> Option<i8>,
@@ -225,7 +222,7 @@ impl Board {
         let mut y_mem = 0;
 
         while let (Some(x), Some(y)) = (get_x(x_mem), get_y(y_mem)) {
-            if !self.try_add_move(moves, from, x, y) {
+            if !self.try_add_move(moves, piece, from, x, y, allow_taking) {
                 break;
             }
 
@@ -234,87 +231,98 @@ impl Board {
         }
     }
 
-    fn try_add_move(&self, moves: &mut Vec<Move>, from: Coord, x: i8, y: i8) -> bool {
-        if let Some((other_piece, to)) = self.peek_translated(from, x, y) {
-            if other_piece.is_none() {
-                moves.push(Move { from, to });
-                return true;
-            }
+    fn try_add_move(&self, moves: &mut Vec<Move>, piece: Piece, from: Coord, x: i8, y: i8, allow_taking: bool) -> bool {
+        if let Some(to) = from.translate(x, y) {
+            return match self.peek(to) {
+                Some(target) if allow_taking && target.color != piece.color => {
+                    moves.push(Move { from, to });
+                    return false;
+                }
+                Some(_) => false,
+                None => {
+                    moves.push(Move { from, to });
+                    return true;
+                }
+            };
         }
 
         return false;
     }
 
     pub fn get_available_moves(&self, from: Coord) -> Option<Vec<Move>> {
-        return self.peek(from).0.map(|piece| {
+        return self.peek(from).map(|piece| {
             let mut moves: Vec<Move> = Vec::new();
 
             match piece {
-                Piece::Pawn(Color::White) => {
+                Piece { piece_type: PieceType::Pawn, color: Color::White }=> {
                     if from.row == 2 {
                         self.walk(
                             &mut moves,
+                            piece,
                             from,
                             |_| Some(0),
                             |y| if y == 2 { None } else { Some(y + 1) },
+                            false
                         );
                     } else {
-                        self.try_add_move(&mut moves, from, 0, 1);
+                        self.try_add_move(&mut moves, piece, from, 0, 1, false);
                     }
-                }
-                Piece::Pawn(Color::Black) => {
+                },
+                Piece { piece_type: PieceType::Pawn, color: Color::Black } => {
                     if from.row == 7 {
                         self.walk(
                             &mut moves,
+                            piece,
                             from,
                             |_| Some(0),
                             |y| if y == -2 { None } else { Some(y - 1) },
+                            false
                         );
                     } else {
-                        self.try_add_move(&mut moves, from, 0, -1);
+                        self.try_add_move(&mut moves, piece, from, 0, 1, false);
                     }
                 }
-                Piece::Rook(_) => {
-                    self.walk(&mut moves, from, |x| Some(x + 1), |_| Some(0));
-                    self.walk(&mut moves, from, |x| Some(x - 1), |_| Some(0));
-                    self.walk(&mut moves, from, |_| Some(0), |y| Some(y + 1));
-                    self.walk(&mut moves, from, |_| Some(0), |y| Some(y - 1));
+                Piece { piece_type: PieceType::Rook, .. } => {
+                    self.walk(&mut moves, piece, from, |x| Some(x + 1), |_| Some(0), true);
+                    self.walk(&mut moves, piece, from, |x| Some(x - 1), |_| Some(0), true);
+                    self.walk(&mut moves, piece, from, |_| Some(0), |y| Some(y + 1), true);
+                    self.walk(&mut moves, piece, from, |_| Some(0), |y| Some(y - 1), true);
                 }
-                Piece::Bishop(_) => {
-                    self.walk(&mut moves, from, |x| Some(x + 1), |y| Some(y + 1));
-                    self.walk(&mut moves, from, |x| Some(x - 1), |y| Some(y - 1));
-                    self.walk(&mut moves, from, |x| Some(x + 1), |y| Some(y - 1));
-                    self.walk(&mut moves, from, |x| Some(x - 1), |y| Some(y + 1));
+                Piece { piece_type: PieceType::Bishop, .. } => {
+                    self.walk(&mut moves, piece, from, |x| Some(x + 1), |y| Some(y + 1), true);
+                    self.walk(&mut moves, piece, from, |x| Some(x - 1), |y| Some(y - 1), true);
+                    self.walk(&mut moves, piece, from, |x| Some(x + 1), |y| Some(y - 1), true);
+                    self.walk(&mut moves, piece, from, |x| Some(x - 1), |y| Some(y + 1), true);
                 }
-                Piece::Queen(_) => {
-                    self.walk(&mut moves, from, |x| Some(x + 1), |_| Some(0));
-                    self.walk(&mut moves, from, |x| Some(x - 1), |_| Some(0));
-                    self.walk(&mut moves, from, |_| Some(0), |y| Some(y + 1));
-                    self.walk(&mut moves, from, |_| Some(0), |y| Some(y - 1));
-                    self.walk(&mut moves, from, |x| Some(x + 1), |y| Some(y + 1));
-                    self.walk(&mut moves, from, |x| Some(x - 1), |y| Some(y - 1));
-                    self.walk(&mut moves, from, |x| Some(x + 1), |y| Some(y - 1));
-                    self.walk(&mut moves, from, |x| Some(x - 1), |y| Some(y + 1));
+                Piece { piece_type: PieceType::Queen, .. } => {
+                    self.walk(&mut moves, piece, from, |x| Some(x + 1), |_| Some(0), true);
+                    self.walk(&mut moves, piece, from, |x| Some(x - 1), |_| Some(0), true);
+                    self.walk(&mut moves, piece, from, |_| Some(0), |y| Some(y + 1), true);
+                    self.walk(&mut moves, piece, from, |_| Some(0), |y| Some(y - 1), true);
+                    self.walk(&mut moves, piece, from, |x| Some(x + 1), |y| Some(y + 1), true);
+                    self.walk(&mut moves, piece, from, |x| Some(x - 1), |y| Some(y - 1), true);
+                    self.walk(&mut moves, piece, from, |x| Some(x + 1), |y| Some(y - 1), true);
+                    self.walk(&mut moves, piece, from, |x| Some(x - 1), |y| Some(y + 1), true);
                 }
-                Piece::Knight(_) => {
-                    self.try_add_move(&mut moves, from, 1, -2);
-                    self.try_add_move(&mut moves, from, 1, 2);
-                    self.try_add_move(&mut moves, from, -1, -2);
-                    self.try_add_move(&mut moves, from, -1, 2);
-                    self.try_add_move(&mut moves, from, -2, 1);
-                    self.try_add_move(&mut moves, from, 2, 1);
-                    self.try_add_move(&mut moves, from, -2, -1);
-                    self.try_add_move(&mut moves, from, 2, -1);
+                Piece { piece_type: PieceType::Knight, .. } => {
+                    self.try_add_move(&mut moves, piece, from, 1, -2, true);
+                    self.try_add_move(&mut moves, piece, from, 1, 2, true);
+                    self.try_add_move(&mut moves, piece, from, -1, -2, true);
+                    self.try_add_move(&mut moves, piece, from, -1, 2, true);
+                    self.try_add_move(&mut moves, piece, from, -2, 1, true);
+                    self.try_add_move(&mut moves, piece, from, 2, 1, true);
+                    self.try_add_move(&mut moves, piece, from, -2, -1, true);
+                    self.try_add_move(&mut moves, piece, from, 2, -1, true);
                 }
-                Piece::King(_) => {
-                    self.try_add_move(&mut moves, from, 0, 1);
-                    self.try_add_move(&mut moves, from, 0, -1);
-                    self.try_add_move(&mut moves, from, 1, -1);
-                    self.try_add_move(&mut moves, from, 1, 0);
-                    self.try_add_move(&mut moves, from, 1, 1);
-                    self.try_add_move(&mut moves, from, -1, 0);
-                    self.try_add_move(&mut moves, from, -1, 1);
-                    self.try_add_move(&mut moves, from, -1, -1);
+                Piece { piece_type: PieceType::King, .. } => {
+                    self.try_add_move(&mut moves, piece, from, 0, 1, true);
+                    self.try_add_move(&mut moves, piece, from, 0, -1, true);
+                    self.try_add_move(&mut moves, piece, from, 1, -1, true);
+                    self.try_add_move(&mut moves, piece, from, 1, 0, true);
+                    self.try_add_move(&mut moves, piece, from, 1, 1, true);
+                    self.try_add_move(&mut moves, piece, from, -1, 0, true);
+                    self.try_add_move(&mut moves, piece, from, -1, 1, true);
+                    self.try_add_move(&mut moves, piece, from, -1, -1, true);
                 }
             };
 
