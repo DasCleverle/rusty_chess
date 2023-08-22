@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { executeMove, getAvailableMoves, getBoard } from "./commands";
-import { Coord, Piece, toCoordFromXY, toOffset } from "./chess";
+import { Coord, Move, Piece, toCoordFromXY, toOffset } from "./chess";
 
 interface BoardState {
     rows: Row[]
     selected?: Coord;
-    targets: Coord[]
+    moves: Move[]
 }
 
 interface Row {
@@ -96,27 +96,27 @@ function Square({ isTarget, isSelected, piece, onClick }: SquareProps) {
 }
 
 export function App() {
-    const [board, setBoard] = useState<BoardState>({ rows: [], targets: [] });
+    const [board, setBoard] = useState<BoardState>({ rows: [], moves: [] });
 
     const update = () => updateBoard().then(rows => setBoard(s => ({ ...s, rows })));
 
     useEffect(() => { update(); }, []);
 
     const handleSquareClick = async (square: Square) => {
-        if (board.selected && board.targets.includes(square.coord)) {
-            await executeMove({
-                from: board.selected,
-                to: square.coord,
-            });
-            await update();
+        if (board.selected) {
+            const move = board.moves.find(m => m.to == square.coord);
 
-            setBoard(s => ({
-                ...s,
-                selected: undefined,
-                targets: []
-            }));
+            if (move) {
+                await executeMove(move);
+                await update();
 
-            return;
+                setBoard(s => ({
+                    ...s,
+                    selected: undefined,
+                    moves: []
+                }));
+                return;
+            }
         }
 
         const moves = await getAvailableMoves(square.coord);
@@ -125,7 +125,7 @@ export function App() {
             setBoard(s => ({
                 ...s,
                 selected: undefined,
-                targets: []
+                moves: []
             }));
             return;
         }
@@ -133,7 +133,7 @@ export function App() {
         setBoard(s => ({
             ...s,
             selected: square.coord,
-            targets: moves.map(m => m.to)
+            moves
         }));
     }
 
@@ -153,15 +153,15 @@ export function App() {
 
             {board.rows.map(row => (
                 <div className="row" key={row.row}>
-                    <div className="rank-label">{row.row}</div>
+                    <div className="rank-label">{row.row + 1}</div>
 
                     {row.squares.map(square =>
                         <Square
                             key={square.coord}
                             coord={square.coord}
                             piece={square.piece}
-                            isSelected={board.selected == square.coord}
-                            isTarget={board.targets.includes(square.coord)}
+                            isSelected={board.selected === square.coord}
+                            isTarget={board.moves.some(m => m.to === square.coord)}
                             onClick={() => handleSquareClick(square)}
                         />
                     )}
