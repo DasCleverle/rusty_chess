@@ -216,6 +216,8 @@ struct EnPassantTarget {
 pub struct Board {
     pieces: [Option<Piece>; 64],
 
+    turn: Color,
+
     black_can_castle: bool,
     white_can_castle: bool,
 
@@ -226,6 +228,8 @@ impl Board {
     pub fn new_game() -> Board {
         let mut board = Board {
             pieces: [None; 64],
+
+            turn: Color::White,
 
             black_can_castle: true,
             white_can_castle: true,
@@ -276,6 +280,10 @@ impl Board {
         return self.pieces;
     }
 
+    pub fn turn(&self) -> Color {
+        return self.turn;
+    }
+
     fn set(&mut self, coord: Coord, piece: Piece) {
         self.pieces[coord.to_offset()] = Some(piece);
     }
@@ -285,7 +293,11 @@ impl Board {
     }
 
     pub fn get_available_moves(&self, from: Coord) -> Option<Vec<Move>> {
-        return self.peek(from).map(|piece| {
+        return self.peek(from).and_then(|piece| {
+            if piece.color != self.turn {
+                return None;
+            }
+
             let mut moves: Vec<Move> = Vec::new();
 
             match piece {
@@ -360,7 +372,7 @@ impl Board {
                 }
             };
 
-            return moves;
+            return Some(moves);
         });
     }
 
@@ -487,6 +499,8 @@ impl Board {
                 self.kill_en_passant_victim(&mv);
                 self.execute_castle(&mv)?;
 
+                self.turn = self.turn.invert();
+
                 return Ok(());
             }
         };
@@ -541,4 +555,5 @@ impl Board {
             self.pieces[victim.to_offset()] = None;
         }
     }
+
 }

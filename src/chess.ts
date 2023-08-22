@@ -1,4 +1,4 @@
-const A = 97;
+export type Color = 'Black' | 'White';
 
 export type Coord = string;
 
@@ -21,6 +21,8 @@ export interface Move {
     to: Coord;
     takes?: Piece;
 }
+
+const A = 97;
 
 export function toCoordFromOffset(offset: number): Coord {
     const column = String.fromCharCode(A + Math.floor(offset / 8));

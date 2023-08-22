@@ -1,7 +1,8 @@
 import { invoke } from "@tauri-apps/api/tauri";
-import { Coord, Move, Piece } from "./chess";
+import { Color, Coord, Move, Piece } from "./chess";
 
 interface BoardPayload {
+    turn: Color;
     pieces: Piece[];
 }
 

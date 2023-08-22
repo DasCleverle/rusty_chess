@@ -5,7 +5,7 @@ mod chess;
 
 use std::sync::{Arc, Mutex};
 
-use chess::{Board, Coord, Move, Piece};
+use chess::{Board, Color, Coord, Move, Piece};
 use serde::Serialize;
 use tauri::State;
 
@@ -30,6 +30,7 @@ impl Serialize for AppError {
 #[derive(Serialize, Clone)]
 struct BoardPayload {
     pieces: Vec<Option<Piece>>,
+    turn: Color,
 }
 
 struct BoardState {
@@ -39,7 +40,8 @@ struct BoardState {
 impl From<&Board> for BoardPayload {
     fn from(value: &Board) -> Self {
         let pieces = Vec::from(value.pieces());
-        return BoardPayload { pieces };
+        let turn = value.turn();
+        return BoardPayload { pieces, turn };
     }
 }
 
@@ -65,21 +67,17 @@ fn get_available_moves(coord: Coord, state: State<BoardState>) -> Result<Vec<Mov
 #[tauri::command]
 fn exec_move(mv: Move, state: State<BoardState>) -> Result<(), AppError> {
     return match state.inner().board.lock() {
-        Ok(mut board) => {
-            match board.exec_move(&mv) {
-                Ok(_) => Ok(()),
-                Err(err) => Err(AppError::Err(err)),
-            }
-        }
+        Ok(mut board) => match board.exec_move(&mv) {
+            Ok(_) => Ok(()),
+            Err(err) => Err(AppError::Err(err)),
+        },
         Err(_) => Err(AppError::LockErr),
     };
 }
 
 fn main() {
     let board = Board::new_game();
-    let state = BoardState {
-        board: Arc::new(Mutex::new(board)),
-    };
+    let state = BoardState { board: Arc::new(Mutex::new(board)) };
 
     tauri::Builder::default()
         .manage(state)

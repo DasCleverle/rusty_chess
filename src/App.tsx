@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { executeMove, getAvailableMoves, getBoard } from "./commands";
-import { Coord, Move, Piece, toCoordFromXY, toOffset } from "./chess";
+import { Color, Coord, Move, Piece, toCoordFromXY, toOffset } from "./chess";
 
 interface BoardState {
-    rows: Row[]
+    rows: Row[];
     selected?: Coord;
-    moves: Move[]
+    moves: Move[];
+    turn: Color;
 }
 
 interface Row {
@@ -35,7 +36,7 @@ function getImageName(piece: Piece) {
     return str;
 }
 
-async function updateBoard(): Promise<Row[]> {
+async function updateBoard(): Promise<{ rows: Row[], turn: Color }> {
     const payload = await getBoard();
     const rows = [];
 
@@ -60,7 +61,7 @@ async function updateBoard(): Promise<Row[]> {
 
     rows.sort((a, b) => b.row - a.row);
 
-    return rows;
+    return { rows, turn: payload.turn };
 };
 
 interface SquareProps {
@@ -96,9 +97,9 @@ function Square({ isTarget, isSelected, piece, onClick }: SquareProps) {
 }
 
 export function App() {
-    const [board, setBoard] = useState<BoardState>({ rows: [], moves: [] });
+    const [board, setBoard] = useState<BoardState>({ rows: [], moves: [], turn: 'White' });
 
-    const update = () => updateBoard().then(rows => setBoard(s => ({ ...s, rows })));
+    const update = () => updateBoard().then(update => setBoard(s => ({ ...s, ...update })));
 
     useEffect(() => { update(); }, []);
 
@@ -139,34 +140,45 @@ export function App() {
 
     return (
         <div className="container">
-            <div className="row labels">
-                <div className="rank-label"></div>
-                <div className="file-label">A</div>
-                <div className="file-label">B</div>
-                <div className="file-label">C</div>
-                <div className="file-label">D</div>
-                <div className="file-label">E</div>
-                <div className="file-label">F</div>
-                <div className="file-label">G</div>
-                <div className="file-label">H</div>
-            </div>
-
-            {board.rows.map(row => (
-                <div className="row" key={row.row}>
-                    <div className="rank-label">{row.row + 1}</div>
-
-                    {row.squares.map(square =>
-                        <Square
-                            key={square.coord}
-                            coord={square.coord}
-                            piece={square.piece}
-                            isSelected={board.selected === square.coord}
-                            isTarget={board.moves.some(m => m.to === square.coord)}
-                            onClick={() => handleSquareClick(square)}
-                        />
-                    )}
+            <div className="game-info">
+                <div className="turn-indicator">
+                    {board.turn == 'Black' ? <strong>Black's turn</strong> : null}
                 </div>
-            ))}
+                <div className="spacer"></div>
+                <div className="turn-indicator">
+                    {board.turn == 'White' ? <strong>White's turn</strong> : null}
+                </div>
+            </div>
+            <div className="board">
+                <div className="row labels">
+                    <div className="rank-label"></div>
+                    <div className="file-label">A</div>
+                    <div className="file-label">B</div>
+                    <div className="file-label">C</div>
+                    <div className="file-label">D</div>
+                    <div className="file-label">E</div>
+                    <div className="file-label">F</div>
+                    <div className="file-label">G</div>
+                    <div className="file-label">H</div>
+                </div>
+
+                {board.rows.map(row => (
+                    <div className="row" key={row.row}>
+                        <div className="rank-label">{row.row + 1}</div>
+
+                        {row.squares.map(square =>
+                            <Square
+                                key={square.coord}
+                                coord={square.coord}
+                                piece={square.piece}
+                                isSelected={board.selected === square.coord}
+                                isTarget={board.moves.some(m => m.to === square.coord)}
+                                onClick={() => handleSquareClick(square)}
+                            />
+                        )}
+                    </div>
+                ))}
+            </div>
         </div>
     );
 }
