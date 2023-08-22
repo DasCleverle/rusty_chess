@@ -51,8 +51,6 @@ impl Coord {
             return None;
         }
 
-        println!("translating {self} to {column}{row}");
-
         return Some(Coord { row, column });
     }
 }
@@ -102,6 +100,13 @@ impl<'de> Deserialize<'de> for Coord {
     {
         deserializer.deserialize_str(CoordVisitor)
     }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+enum CaptureRule {
+    Disallowed,
+    Allowed,
+    MustCapture
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Serialize, strum_macros::IntoStaticStr, strum_macros::Display)]
@@ -213,7 +218,7 @@ impl Board {
         return self.pieces;
     }
 
-    fn walk<X, Y>(&self, moves: &mut Vec<Move>, piece: Piece, from: Coord, get_x: X, get_y: Y, allow_taking: bool) -> ()
+    fn walk<X, Y>(&self, moves: &mut Vec<Move>, piece: Piece, from: Coord, get_x: X, get_y: Y, capture_rule: CaptureRule) -> ()
     where
         X: Fn(i8) -> Option<i8>,
         Y: Fn(i8) -> Option<i8>,
@@ -222,7 +227,7 @@ impl Board {
         let mut y_mem = 0;
 
         while let (Some(x), Some(y)) = (get_x(x_mem), get_y(y_mem)) {
-            if !self.try_add_move(moves, piece, from, x, y, allow_taking) {
+            if !self.try_add_move(moves, piece, from, x, y, capture_rule) {
                 break;
             }
 
@@ -231,14 +236,19 @@ impl Board {
         }
     }
 
-    fn try_add_move(&self, moves: &mut Vec<Move>, piece: Piece, from: Coord, x: i8, y: i8, allow_taking: bool) -> bool {
+    fn try_add_move(&self, moves: &mut Vec<Move>, piece: Piece, from: Coord, x: i8, y: i8, capture_rule: CaptureRule) -> bool {
         if let Some(to) = from.translate(x, y) {
             return match self.peek(to) {
-                Some(target) if allow_taking && target.color != piece.color => {
+                Some(target) if target.color != piece.color => {
+                    if capture_rule == CaptureRule::Disallowed {
+                        return false;
+                    }
+
                     moves.push(Move { from, to });
                     return false;
                 }
                 Some(_) => false,
+                None if capture_rule == CaptureRule::MustCapture => false,
                 None => {
                     moves.push(Move { from, to });
                     return true;
@@ -262,11 +272,14 @@ impl Board {
                             from,
                             |_| Some(0),
                             |y| if y == 2 { None } else { Some(y + 1) },
-                            false
+                            CaptureRule::Disallowed
                         );
                     } else {
-                        self.try_add_move(&mut moves, piece, from, 0, 1, false);
+                        self.try_add_move(&mut moves, piece, from, 0, 1, CaptureRule::Disallowed);
                     }
+
+                    self.try_add_move(&mut moves, piece, from, 1, 1, CaptureRule::MustCapture);
+                    self.try_add_move(&mut moves, piece, from, -1, 1, CaptureRule::MustCapture);
                 },
                 Piece { piece_type: PieceType::Pawn, color: Color::Black } => {
                     if from.row == 7 {
@@ -276,53 +289,56 @@ impl Board {
                             from,
                             |_| Some(0),
                             |y| if y == -2 { None } else { Some(y - 1) },
-                            false
+                            CaptureRule::Disallowed
                         );
                     } else {
-                        self.try_add_move(&mut moves, piece, from, 0, 1, false);
+                        self.try_add_move(&mut moves, piece, from, 0, -1, CaptureRule::Disallowed);
                     }
+
+                    self.try_add_move(&mut moves, piece, from, 1, -1, CaptureRule::MustCapture);
+                    self.try_add_move(&mut moves, piece, from, -1, -1, CaptureRule::MustCapture);
                 }
                 Piece { piece_type: PieceType::Rook, .. } => {
-                    self.walk(&mut moves, piece, from, |x| Some(x + 1), |_| Some(0), true);
-                    self.walk(&mut moves, piece, from, |x| Some(x - 1), |_| Some(0), true);
-                    self.walk(&mut moves, piece, from, |_| Some(0), |y| Some(y + 1), true);
-                    self.walk(&mut moves, piece, from, |_| Some(0), |y| Some(y - 1), true);
+                    self.walk(&mut moves, piece, from, |x| Some(x + 1), |_| Some(0), CaptureRule::Allowed);
+                    self.walk(&mut moves, piece, from, |x| Some(x - 1), |_| Some(0), CaptureRule::Allowed);
+                    self.walk(&mut moves, piece, from, |_| Some(0), |y| Some(y + 1), CaptureRule::Allowed);
+                    self.walk(&mut moves, piece, from, |_| Some(0), |y| Some(y - 1), CaptureRule::Allowed);
                 }
                 Piece { piece_type: PieceType::Bishop, .. } => {
-                    self.walk(&mut moves, piece, from, |x| Some(x + 1), |y| Some(y + 1), true);
-                    self.walk(&mut moves, piece, from, |x| Some(x - 1), |y| Some(y - 1), true);
-                    self.walk(&mut moves, piece, from, |x| Some(x + 1), |y| Some(y - 1), true);
-                    self.walk(&mut moves, piece, from, |x| Some(x - 1), |y| Some(y + 1), true);
+                    self.walk(&mut moves, piece, from, |x| Some(x + 1), |y| Some(y + 1), CaptureRule::Allowed);
+                    self.walk(&mut moves, piece, from, |x| Some(x - 1), |y| Some(y - 1), CaptureRule::Allowed);
+                    self.walk(&mut moves, piece, from, |x| Some(x + 1), |y| Some(y - 1), CaptureRule::Allowed);
+                    self.walk(&mut moves, piece, from, |x| Some(x - 1), |y| Some(y + 1), CaptureRule::Allowed);
                 }
                 Piece { piece_type: PieceType::Queen, .. } => {
-                    self.walk(&mut moves, piece, from, |x| Some(x + 1), |_| Some(0), true);
-                    self.walk(&mut moves, piece, from, |x| Some(x - 1), |_| Some(0), true);
-                    self.walk(&mut moves, piece, from, |_| Some(0), |y| Some(y + 1), true);
-                    self.walk(&mut moves, piece, from, |_| Some(0), |y| Some(y - 1), true);
-                    self.walk(&mut moves, piece, from, |x| Some(x + 1), |y| Some(y + 1), true);
-                    self.walk(&mut moves, piece, from, |x| Some(x - 1), |y| Some(y - 1), true);
-                    self.walk(&mut moves, piece, from, |x| Some(x + 1), |y| Some(y - 1), true);
-                    self.walk(&mut moves, piece, from, |x| Some(x - 1), |y| Some(y + 1), true);
+                    self.walk(&mut moves, piece, from, |x| Some(x + 1), |_| Some(0), CaptureRule::Allowed);
+                    self.walk(&mut moves, piece, from, |x| Some(x - 1), |_| Some(0), CaptureRule::Allowed);
+                    self.walk(&mut moves, piece, from, |_| Some(0), |y| Some(y + 1), CaptureRule::Allowed);
+                    self.walk(&mut moves, piece, from, |_| Some(0), |y| Some(y - 1), CaptureRule::Allowed);
+                    self.walk(&mut moves, piece, from, |x| Some(x + 1), |y| Some(y + 1), CaptureRule::Allowed);
+                    self.walk(&mut moves, piece, from, |x| Some(x - 1), |y| Some(y - 1), CaptureRule::Allowed);
+                    self.walk(&mut moves, piece, from, |x| Some(x + 1), |y| Some(y - 1), CaptureRule::Allowed);
+                    self.walk(&mut moves, piece, from, |x| Some(x - 1), |y| Some(y + 1), CaptureRule::Allowed);
                 }
                 Piece { piece_type: PieceType::Knight, .. } => {
-                    self.try_add_move(&mut moves, piece, from, 1, -2, true);
-                    self.try_add_move(&mut moves, piece, from, 1, 2, true);
-                    self.try_add_move(&mut moves, piece, from, -1, -2, true);
-                    self.try_add_move(&mut moves, piece, from, -1, 2, true);
-                    self.try_add_move(&mut moves, piece, from, -2, 1, true);
-                    self.try_add_move(&mut moves, piece, from, 2, 1, true);
-                    self.try_add_move(&mut moves, piece, from, -2, -1, true);
-                    self.try_add_move(&mut moves, piece, from, 2, -1, true);
+                    self.try_add_move(&mut moves, piece, from, 1, -2, CaptureRule::Allowed);
+                    self.try_add_move(&mut moves, piece, from, 1, 2, CaptureRule::Allowed);
+                    self.try_add_move(&mut moves, piece, from, -1, -2, CaptureRule::Allowed);
+                    self.try_add_move(&mut moves, piece, from, -1, 2, CaptureRule::Allowed);
+                    self.try_add_move(&mut moves, piece, from, -2, 1, CaptureRule::Allowed);
+                    self.try_add_move(&mut moves, piece, from, 2, 1, CaptureRule::Allowed);
+                    self.try_add_move(&mut moves, piece, from, -2, -1, CaptureRule::Allowed);
+                    self.try_add_move(&mut moves, piece, from, 2, -1, CaptureRule::Allowed);
                 }
                 Piece { piece_type: PieceType::King, .. } => {
-                    self.try_add_move(&mut moves, piece, from, 0, 1, true);
-                    self.try_add_move(&mut moves, piece, from, 0, -1, true);
-                    self.try_add_move(&mut moves, piece, from, 1, -1, true);
-                    self.try_add_move(&mut moves, piece, from, 1, 0, true);
-                    self.try_add_move(&mut moves, piece, from, 1, 1, true);
-                    self.try_add_move(&mut moves, piece, from, -1, 0, true);
-                    self.try_add_move(&mut moves, piece, from, -1, 1, true);
-                    self.try_add_move(&mut moves, piece, from, -1, -1, true);
+                    self.try_add_move(&mut moves, piece, from, 0, 1, CaptureRule::Allowed);
+                    self.try_add_move(&mut moves, piece, from, 0, -1, CaptureRule::Allowed);
+                    self.try_add_move(&mut moves, piece, from, 1, -1, CaptureRule::Allowed);
+                    self.try_add_move(&mut moves, piece, from, 1, 0, CaptureRule::Allowed);
+                    self.try_add_move(&mut moves, piece, from, 1, 1, CaptureRule::Allowed);
+                    self.try_add_move(&mut moves, piece, from, -1, 0, CaptureRule::Allowed);
+                    self.try_add_move(&mut moves, piece, from, -1, 1, CaptureRule::Allowed);
+                    self.try_add_move(&mut moves, piece, from, -1, -1, CaptureRule::Allowed);
                 }
             };
 
