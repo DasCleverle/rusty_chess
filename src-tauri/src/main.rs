@@ -1,8 +1,6 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-#[macro_use] extern crate serde;
-
 mod chess;
 
 use std::sync::{Arc, Mutex};
@@ -68,7 +66,7 @@ fn get_available_moves(coord: Coord, state: State<BoardState>) -> Result<Vec<Mov
 fn exec_move(mv: Move, state: State<BoardState>) -> Result<(), AppError> {
     return match state.inner().board.lock() {
         Ok(mut board) => {
-            match board.exec_move(mv) {
+            match board.exec_move(&mv) {
                 Ok(_) => Ok(()),
                 Err(err) => Err(AppError::Err(err)),
             }
