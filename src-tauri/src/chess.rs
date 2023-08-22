@@ -221,31 +221,28 @@ impl Board {
         X: Fn(i8) -> Option<i8>,
         Y: Fn(i8) -> Option<i8>,
     {
-        let mut x_counter = 0;
-        let mut y_counter = 0;
+        let mut x_mem = 0;
+        let mut y_mem = 0;
 
-        loop {
-            match (get_x(x_counter), get_y(y_counter)) {
-                (Some(x), Some(y)) => {
-                    if let Some((other_piece, to)) = self.peek_translated(from, x, y) {
-                        if other_piece.is_none() {
-                            moves.push(Move { from, to })
-                        }
-                        else {
-                            break;
-                        }
-                    }
-                    else {
-                        break;
-                    }
-
-                    x_counter = x;
-                    y_counter = y;
-                },
-                _ => break,
+        while let (Some(x), Some(y)) = (get_x(x_mem), get_y(y_mem)) {
+            if !self.try_add_move(moves, from, x, y) {
+                break;
             }
 
+            x_mem = x;
+            y_mem = y;
         }
+    }
+
+    fn try_add_move(&self, moves: &mut Vec<Move>, from: Coord, x: i8, y: i8) -> bool {
+        if let Some((other_piece, to)) = self.peek_translated(from, x, y) {
+            if other_piece.is_none() {
+                moves.push(Move { from, to });
+                return true;
+            }
+        }
+
+        return false;
     }
 
     pub fn get_available_moves(&self, from: Coord) -> Option<Vec<Move>> {
@@ -254,37 +251,27 @@ impl Board {
 
             match piece {
                 Piece::Pawn(Color::White) => {
-                    if let Some((other_piece, to)) = self.peek_translated(from, 0, 1) {
-                        if other_piece.is_none() {
-                            moves.push(Move { from, to });
-                        } else {
-                            return moves;
-                        }
-                    }
-
                     if from.row == 2 {
-                        if let Some((other_piece, to)) = self.peek_translated(from, 0, 2) {
-                            if other_piece.is_none() {
-                                moves.push(Move { from, to });
-                            }
-                        }
+                        self.walk(
+                            &mut moves,
+                            from,
+                            |_| Some(0),
+                            |y| if y == 2 { None } else { Some(y + 1) },
+                        );
+                    } else {
+                        self.try_add_move(&mut moves, from, 0, 1);
                     }
                 }
                 Piece::Pawn(Color::Black) => {
-                    if let Some((other_piece, to)) = self.peek_translated(from, 0, -1) {
-                        if other_piece.is_none() {
-                            moves.push(Move { from, to });
-                        } else {
-                            return moves;
-                        }
-                    }
-
                     if from.row == 7 {
-                        if let Some((other_piece, to)) = self.peek_translated(from, 0, -2) {
-                            if other_piece.is_none() {
-                                moves.push(Move { from, to });
-                            }
-                        }
+                        self.walk(
+                            &mut moves,
+                            from,
+                            |_| Some(0),
+                            |y| if y == -2 { None } else { Some(y - 1) },
+                        );
+                    } else {
+                        self.try_add_move(&mut moves, from, 0, -1);
                     }
                 }
                 Piece::Rook(_) => {
@@ -292,13 +279,13 @@ impl Board {
                     self.walk(&mut moves, from, |x| Some(x - 1), |_| Some(0));
                     self.walk(&mut moves, from, |_| Some(0), |y| Some(y + 1));
                     self.walk(&mut moves, from, |_| Some(0), |y| Some(y - 1));
-                },
+                }
                 Piece::Bishop(_) => {
                     self.walk(&mut moves, from, |x| Some(x + 1), |y| Some(y + 1));
                     self.walk(&mut moves, from, |x| Some(x - 1), |y| Some(y - 1));
                     self.walk(&mut moves, from, |x| Some(x + 1), |y| Some(y - 1));
                     self.walk(&mut moves, from, |x| Some(x - 1), |y| Some(y + 1));
-                },
+                }
                 Piece::Queen(_) => {
                     self.walk(&mut moves, from, |x| Some(x + 1), |_| Some(0));
                     self.walk(&mut moves, from, |x| Some(x - 1), |_| Some(0));
@@ -308,19 +295,26 @@ impl Board {
                     self.walk(&mut moves, from, |x| Some(x - 1), |y| Some(y - 1));
                     self.walk(&mut moves, from, |x| Some(x + 1), |y| Some(y - 1));
                     self.walk(&mut moves, from, |x| Some(x - 1), |y| Some(y + 1));
-                },
+                }
                 Piece::Knight(_) => {
-
-                },
+                    self.try_add_move(&mut moves, from, 1, -2);
+                    self.try_add_move(&mut moves, from, 1, 2);
+                    self.try_add_move(&mut moves, from, -1, -2);
+                    self.try_add_move(&mut moves, from, -1, 2);
+                    self.try_add_move(&mut moves, from, -2, 1);
+                    self.try_add_move(&mut moves, from, 2, 1);
+                    self.try_add_move(&mut moves, from, -2, -1);
+                    self.try_add_move(&mut moves, from, 2, -1);
+                }
                 Piece::King(_) => {
-                    self.walk(&mut moves, from, |x| if x >= 1 { None } else { Some(x + 1) }, |_| Some(0));
-                    self.walk(&mut moves, from, |x| if x <= -1 { None } else { Some(x - 1) }, |_| Some(0));
-                    self.walk(&mut moves, from, |_| Some(0), |y| if y >= 1 { None } else { Some(y + 1) });
-                    self.walk(&mut moves, from, |_| Some(0), |y| if y <= -1 { None } else { Some(y - 1) });
-                    self.walk(&mut moves, from, |x| if x >= 1 { None } else { Some(x + 1) }, |y| if y >= 1 { None } else { Some(y + 1) });
-                    self.walk(&mut moves, from, |x| if x <= -1 { None } else { Some(x - 1) }, |y| if y <= -1 { None } else { Some(y - 1) });
-                    self.walk(&mut moves, from, |x| if x >= 1 { None } else { Some(x + 1) }, |y| if y <= -1 { None } else { Some(y - 1) });
-                    self.walk(&mut moves, from, |x| if x <= -1 { None } else { Some(x - 1) }, |y| if y >= 1 { None } else { Some(y + 1) });
+                    self.try_add_move(&mut moves, from, 0, 1);
+                    self.try_add_move(&mut moves, from, 0, -1);
+                    self.try_add_move(&mut moves, from, 1, -1);
+                    self.try_add_move(&mut moves, from, 1, 0);
+                    self.try_add_move(&mut moves, from, 1, 1);
+                    self.try_add_move(&mut moves, from, -1, 0);
+                    self.try_add_move(&mut moves, from, -1, 1);
+                    self.try_add_move(&mut moves, from, -1, -1);
                 }
             };
 
