@@ -48,16 +48,31 @@
 }
 
 .square {
+    display: flex;
+    justify-content: center;
+    align-items: center;
     width: 65px;
     height: 65px;
 }
 
-.to {
-    background-color: #059bf2 !important;
+.square > div {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 65px;
+    height: 65px;
 }
 
-.from {
-    background-color: #012d91 !important;
+.target > div {
+    background-color: rgba(5, 155, 242, 0.5) !important;
+}
+
+.target.occupied > div {
+    background-color: rgba(229, 64, 64, 0.5) !important;
+}
+
+.selected > div {
+    background-color: rgba(84, 203, 10, 0.5)  !important;
 }
 
 .row:nth-child(even) .square:nth-child(even) {

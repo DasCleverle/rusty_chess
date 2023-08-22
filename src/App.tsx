@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { executeMove, getAvailableMoves, getBoard } from "./commands";
-import { Coord, Piece, toCoordFromXY, toOffset, toXYFromCoord } from "./chess";
+import { Coord, Piece, toCoordFromXY, toOffset } from "./chess";
 
 interface BoardState {
     rows: Row[]
@@ -63,6 +63,38 @@ async function updateBoard(): Promise<Row[]> {
     return rows;
 };
 
+interface SquareProps {
+    isTarget: boolean;
+    isSelected: boolean;
+    coord: Coord;
+    piece?: Piece;
+    onClick: () => void;
+}
+
+function Square({ isTarget, isSelected, piece, onClick }: SquareProps) {
+    const classes = ['square'];
+
+    if (isSelected) {
+        classes.push('selected');
+    }
+
+    if (isTarget) {
+        classes.push('target');
+    }
+
+    if (piece) {
+        classes.push('occupied');
+    }
+
+    return (
+        <div className={classes.join(' ')} onClick={onClick}>
+            <div>
+                {piece ? <img src={`/pieces/${getImageName(piece)}.png`} /> : null}
+            </div>
+        </div>
+    );
+}
+
 export function App() {
     const [board, setBoard] = useState<BoardState>({ rows: [], targets: [] });
 
@@ -123,11 +155,16 @@ export function App() {
                 <div className="row" key={row.row}>
                     <div className="rank-label">{row.row}</div>
 
-                    {row.squares.map(square => (
-                        <div className={`square ${board.selected === square.coord ? 'from' : ''} ${board.targets.includes(square.coord) ? 'to' : ''}`} key={square.coord} onClick={() => handleSquareClick(square)}>
-                            {square.piece ? <img src={`/pieces/${getImageName(square.piece)}.png`} /> : null}
-                        </div>
-                    ))}
+                    {row.squares.map(square =>
+                        <Square
+                            key={square.coord}
+                            coord={square.coord}
+                            piece={square.piece}
+                            isSelected={board.selected == square.coord}
+                            isTarget={board.targets.includes(square.coord)}
+                            onClick={() => handleSquareClick(square)}
+                        />
+                    )}
                 </div>
             ))}
         </div>
