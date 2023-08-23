@@ -2,24 +2,27 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod chess;
+mod fen;
 
-use std::sync::{Arc, Mutex};
+use anyhow::Result;
+
+use std::{
+    borrow::BorrowMut,
+    sync::{Arc, Mutex},
+};
 
 use chess::{Board, Color, Coord, Move, Piece};
 use serde::Serialize;
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 
 #[derive(Debug, thiserror::Error)]
-enum AppError {
-    #[error("Could not aquire lock")]
-    LockErr,
-
-    #[error("{0}")]
-    Err(String),
+enum CommandError {
+    #[error(transparent)]
+    Error(#[from] anyhow::Error),
 }
 
-impl Serialize for AppError {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+impl Serialize for CommandError {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
@@ -27,52 +30,72 @@ impl Serialize for AppError {
     }
 }
 
+type CommandResult<T = ()> = anyhow::Result<T, CommandError>;
+
 #[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 struct BoardPayload {
     pieces: Vec<Option<Piece>>,
     turn: Color,
+    white_checked: bool,
+    black_checked: bool
+}
+
+impl BoardPayload {
+    pub fn new(board: &Board) -> Self {
+        return BoardPayload {
+            pieces: board.pieces().into(),
+            turn: board.turn(),
+            white_checked: board.white_checked(),
+            black_checked: board.black_checked()
+        };
+    }
 }
 
 struct BoardState {
     board: Arc<Mutex<Board>>,
 }
 
-impl From<&Board> for BoardPayload {
-    fn from(value: &Board) -> Self {
-        let pieces = Vec::from(value.pieces());
-        let turn = value.turn();
-        return BoardPayload { pieces, turn };
-    }
+fn mutate_board<T>(app: AppHandle, state: State<BoardState>, mutation: T) -> Result<()>
+where
+    T: Fn(&mut Board) -> Result<()>,
+{
+    let mut board = get_board(state);
+
+    mutation(board.borrow_mut())?;
+    app.emit_all("update", BoardPayload::new(&*board))?;
+
+    return Ok(());
+}
+
+fn get_board(state: State<BoardState>) -> std::sync::MutexGuard<'_, Board> {
+    return state.inner().board.lock().unwrap();
 }
 
 #[tauri::command]
-fn get_board(state: State<BoardState>) -> Result<BoardPayload, AppError> {
-    return match state.inner().board.lock() {
-        Ok(board) => Ok((&*board).into()),
-        Err(_) => Err(AppError::LockErr),
-    };
+fn get_board_cmd(state: State<BoardState>) -> BoardPayload {
+    return BoardPayload::new(&*get_board(state));
 }
 
 #[tauri::command]
-fn get_available_moves(coord: Coord, state: State<BoardState>) -> Result<Vec<Move>, AppError> {
-    return match state.inner().board.lock() {
-        Ok(board) => match (*board).get_available_moves(coord) {
-            Some(moves) => Ok(moves),
-            None => Ok(Vec::new()),
-        },
-        Err(_) => Err(AppError::LockErr),
-    };
+fn get_available_moves(coord: Coord, state: State<BoardState>) -> CommandResult<Vec<Move>> {
+    return get_board(state).get_available_moves(coord).map_err(|e| CommandError::Error(e));
 }
 
 #[tauri::command]
-fn exec_move(mv: Move, state: State<BoardState>) -> Result<(), AppError> {
-    return match state.inner().board.lock() {
-        Ok(mut board) => match board.exec_move(&mv) {
-            Ok(_) => Ok(()),
-            Err(err) => Err(AppError::Err(err)),
-        },
-        Err(_) => Err(AppError::LockErr),
-    };
+fn exec_move(mv: Move, app: AppHandle, state: State<BoardState>) -> CommandResult {
+    mutate_board(app, state, |board| board.exec_move(&mv))?;
+    return Ok(());
+}
+
+#[tauri::command]
+fn apply_fen(fen: &str, app: AppHandle, state: State<BoardState>) -> CommandResult {
+    mutate_board(app, state, |board| {
+        board.apply_fen(fen);
+        return Ok(());
+    })?;
+
+    return Ok(());
 }
 
 fn main() {
@@ -81,7 +104,7 @@ fn main() {
 
     tauri::Builder::default()
         .manage(state)
-        .invoke_handler(tauri::generate_handler![get_board, get_available_moves, exec_move])
+        .invoke_handler(tauri::generate_handler![get_board_cmd, get_available_moves, exec_move, apply_fen])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
