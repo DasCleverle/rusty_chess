@@ -2156,6 +2156,7 @@ checksum = "7ffc183a10b4478d04cbbbfc96d0873219d962dd5accaff2ffbd4ceb7df837f4"
 name = "rusty_chess"
 version = "0.0.0"
 dependencies = [
+ "anyhow",
  "serde",
  "serde_json",
  "strum",

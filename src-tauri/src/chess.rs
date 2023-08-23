@@ -1,10 +1,17 @@
+// TODO: castling should not change self.turn
+
 use serde::{de::Visitor, Deserialize, Deserializer, Serialize};
 use std::{fmt::Display, rc::Rc};
 
+use anyhow::anyhow;
+use anyhow::Result;
+
+use crate::fen;
+
 #[derive(Debug, Copy, Clone)]
 pub struct Coord {
-    column: char,
-    row: u8,
+    pub column: char,
+    pub row: u8,
 }
 
 fn is_valid_coord(row: u8, column: char) -> bool {
@@ -159,7 +166,7 @@ impl Serialize for Piece {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Move {
     pub from: Coord,
     pub to: Coord,
@@ -200,6 +207,12 @@ impl Move {
     }
 }
 
+impl Display for Move {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} -> {}", self.from, self.to)
+    }
+}
+
 #[derive(Debug, Copy, Clone, PartialEq)]
 enum CaptureRule {
     Disallowed,
@@ -207,19 +220,24 @@ enum CaptureRule {
     MustCapture,
 }
 
+#[derive(Clone)]
 struct EnPassantTarget {
     color: Color,
     target: Coord,
     victim: Coord,
 }
 
+#[derive(Clone)]
 pub struct Board {
     pieces: [Option<Piece>; 64],
 
     turn: Color,
 
-    black_can_castle: bool,
+    white_checked: bool,
+    black_checked: bool,
+
     white_can_castle: bool,
+    black_can_castle: bool,
 
     en_passant_target: Option<EnPassantTarget>,
 }
@@ -231,49 +249,28 @@ impl Board {
 
             turn: Color::White,
 
-            black_can_castle: true,
+            white_checked: false,
+            black_checked: false,
+
             white_can_castle: true,
+            black_can_castle: true,
 
             en_passant_target: None,
         };
 
-        board.set(Coord::new('a', 1), Piece::new(PieceType::Rook, Color::White));
-        board.set(Coord::new('b', 1), Piece::new(PieceType::Knight, Color::White));
-        board.set(Coord::new('c', 1), Piece::new(PieceType::Bishop, Color::White));
-        board.set(Coord::new('d', 1), Piece::new(PieceType::Queen, Color::White));
-        board.set(Coord::new('e', 1), Piece::new(PieceType::King, Color::White));
-        board.set(Coord::new('f', 1), Piece::new(PieceType::Bishop, Color::White));
-        board.set(Coord::new('g', 1), Piece::new(PieceType::Knight, Color::White));
-        board.set(Coord::new('h', 1), Piece::new(PieceType::Rook, Color::White));
-
-        board.set(Coord::new('a', 2), Piece::new(PieceType::Pawn, Color::White));
-        board.set(Coord::new('b', 2), Piece::new(PieceType::Pawn, Color::White));
-        board.set(Coord::new('c', 2), Piece::new(PieceType::Pawn, Color::White));
-        board.set(Coord::new('d', 2), Piece::new(PieceType::Pawn, Color::White));
-        board.set(Coord::new('e', 2), Piece::new(PieceType::Pawn, Color::White));
-        board.set(Coord::new('f', 2), Piece::new(PieceType::Pawn, Color::White));
-        board.set(Coord::new('g', 2), Piece::new(PieceType::Pawn, Color::White));
-        board.set(Coord::new('h', 2), Piece::new(PieceType::Pawn, Color::White));
-
-        board.set(Coord::new('a', 7), Piece::new(PieceType::Pawn, Color::Black));
-        board.set(Coord::new('b', 7), Piece::new(PieceType::Pawn, Color::Black));
-        board.set(Coord::new('c', 7), Piece::new(PieceType::Pawn, Color::Black));
-        board.set(Coord::new('d', 7), Piece::new(PieceType::Pawn, Color::Black));
-        board.set(Coord::new('e', 7), Piece::new(PieceType::Pawn, Color::Black));
-        board.set(Coord::new('f', 7), Piece::new(PieceType::Pawn, Color::Black));
-        board.set(Coord::new('g', 7), Piece::new(PieceType::Pawn, Color::Black));
-        board.set(Coord::new('h', 7), Piece::new(PieceType::Pawn, Color::Black));
-
-        board.set(Coord::new('a', 8), Piece::new(PieceType::Rook, Color::Black));
-        board.set(Coord::new('b', 8), Piece::new(PieceType::Knight, Color::Black));
-        board.set(Coord::new('c', 8), Piece::new(PieceType::Bishop, Color::Black));
-        board.set(Coord::new('d', 8), Piece::new(PieceType::Queen, Color::Black));
-        board.set(Coord::new('e', 8), Piece::new(PieceType::King, Color::Black));
-        board.set(Coord::new('f', 8), Piece::new(PieceType::Bishop, Color::Black));
-        board.set(Coord::new('g', 8), Piece::new(PieceType::Knight, Color::Black));
-        board.set(Coord::new('h', 8), Piece::new(PieceType::Rook, Color::Black));
+        board.apply_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR");
 
         return board;
+    }
+
+    pub fn apply_fen(&mut self, fen_str: &str) {
+        self.pieces = [None; 64];
+
+        let fen_items = fen::parse_fen(fen_str);
+
+        for item in fen_items {
+            self.set(item.coord, item.piece);
+        }
     }
 
     pub fn pieces(&self) -> [Option<Piece>; 64] {
@@ -284,6 +281,14 @@ impl Board {
         return self.turn;
     }
 
+    pub fn white_checked(&self) -> bool {
+        return self.white_checked;
+    }
+
+    pub fn black_checked(&self) -> bool {
+        return self.black_checked;
+    }
+
     fn set(&mut self, coord: Coord, piece: Piece) {
         self.pieces[coord.to_offset()] = Some(piece);
     }
@@ -292,13 +297,72 @@ impl Board {
         return self.pieces[coord.to_offset()];
     }
 
-    pub fn get_available_moves(&self, from: Coord) -> Option<Vec<Move>> {
-        return self.peek(from).and_then(|piece| {
-            if piece.color != self.turn {
-                return None;
+    pub fn get_all_available_moves(&self, color: Color) -> Vec<Move> {
+        let mut moves: Vec<Move> = Vec::new();
+
+        for i in 0..self.pieces.len() {
+            let square = &self.pieces[i];
+
+            if let Some(Piece { color: piece_color, .. }) = square {
+                if piece_color == &color {
+                    let coord = Coord::from_offset(i).unwrap();
+                    self.get_available_moves_core(&mut moves, coord, color);
+                }
+            }
+        }
+
+        return moves;
+    }
+
+    pub fn get_available_moves(&self, from: Coord) -> Result<Vec<Move>> {
+        let opponent_color = self.turn.invert();
+        let mut moves: Vec<Move> = Vec::new();
+
+        if !self.get_available_moves_core(&mut moves, from, self.turn) {
+            return Ok(moves);
+        }
+
+        let len = moves.len();
+
+        if len == 0 {
+            return Ok(moves);
+        }
+
+        let mut i = 0;
+
+        while i < moves.len() {
+            let mut removed = false;
+            let mut board = self.clone();
+            let mv = &moves[i];
+
+            board.exec_move(&mv)?;
+
+            let opponent_responses = board.get_all_available_moves(opponent_color);
+
+            for response in opponent_responses {
+                if !board.is_checking_move(&response) {
+                    continue;
+                }
+
+                moves.swap_remove(i);
+                i = if i == 0 { 0 } else { i - 1 };
+                removed = true;
+                break;
             }
 
-            let mut moves: Vec<Move> = Vec::new();
+            if !removed {
+                i += 1;
+            }
+        }
+
+        return Ok(moves);
+    }
+
+    fn get_available_moves_core(&self, moves: &mut Vec<Move>, from: Coord, color: Color) -> bool {
+        if let Some(piece) = self.peek(from) {
+            if piece.color != color {
+                return false;
+            }
 
             match piece {
                 Piece { piece_type: PieceType::Pawn, color } => {
@@ -307,58 +371,58 @@ impl Board {
                         Color::Black => (7, -1),
                     };
 
-                    let added_one_move = self.try_add_move(&mut moves, piece, from, 0, mul, CaptureRule::Disallowed, false);
+                    let added_one_move = self.try_add_move(moves, piece, from, 0, mul, CaptureRule::Disallowed, false);
 
                     if from.row == start_row && added_one_move {
-                        self.try_add_move(&mut moves, piece, from, 0, 2 * mul, CaptureRule::Disallowed, true);
+                        self.try_add_move(moves, piece, from, 0, 2 * mul, CaptureRule::Disallowed, true);
                     }
 
-                    self.try_add_move(&mut moves, piece, from, 1, mul, CaptureRule::MustCapture, false);
-                    self.try_add_move(&mut moves, piece, from, -1, mul, CaptureRule::MustCapture, false);
+                    self.try_add_move(moves, piece, from, 1, mul, CaptureRule::MustCapture, false);
+                    self.try_add_move(moves, piece, from, -1, mul, CaptureRule::MustCapture, false);
 
-                    self.try_add_en_passant_move(&mut moves, piece, from);
+                    self.try_add_en_passant_move(moves, piece, from);
                 }
                 Piece { piece_type: PieceType::Rook, .. } => {
-                    self.walk(&mut moves, piece, from, |x| x + 1, |_| 0, CaptureRule::Allowed);
-                    self.walk(&mut moves, piece, from, |x| x - 1, |_| 0, CaptureRule::Allowed);
-                    self.walk(&mut moves, piece, from, |_| 0, |y| y + 1, CaptureRule::Allowed);
-                    self.walk(&mut moves, piece, from, |_| 0, |y| y - 1, CaptureRule::Allowed);
+                    self.walk(moves, piece, from, |x| x + 1, |_| 0, CaptureRule::Allowed);
+                    self.walk(moves, piece, from, |x| x - 1, |_| 0, CaptureRule::Allowed);
+                    self.walk(moves, piece, from, |_| 0, |y| y + 1, CaptureRule::Allowed);
+                    self.walk(moves, piece, from, |_| 0, |y| y - 1, CaptureRule::Allowed);
                 }
                 Piece { piece_type: PieceType::Bishop, .. } => {
-                    self.walk(&mut moves, piece, from, |x| x + 1, |y| y + 1, CaptureRule::Allowed);
-                    self.walk(&mut moves, piece, from, |x| x - 1, |y| y - 1, CaptureRule::Allowed);
-                    self.walk(&mut moves, piece, from, |x| x + 1, |y| y - 1, CaptureRule::Allowed);
-                    self.walk(&mut moves, piece, from, |x| x - 1, |y| y + 1, CaptureRule::Allowed);
+                    self.walk(moves, piece, from, |x| x + 1, |y| y + 1, CaptureRule::Allowed);
+                    self.walk(moves, piece, from, |x| x - 1, |y| y - 1, CaptureRule::Allowed);
+                    self.walk(moves, piece, from, |x| x + 1, |y| y - 1, CaptureRule::Allowed);
+                    self.walk(moves, piece, from, |x| x - 1, |y| y + 1, CaptureRule::Allowed);
                 }
                 Piece { piece_type: PieceType::Queen, .. } => {
-                    self.walk(&mut moves, piece, from, |x| x + 1, |_| 0, CaptureRule::Allowed);
-                    self.walk(&mut moves, piece, from, |x| x - 1, |_| 0, CaptureRule::Allowed);
-                    self.walk(&mut moves, piece, from, |_| 0, |y| y + 1, CaptureRule::Allowed);
-                    self.walk(&mut moves, piece, from, |_| 0, |y| y - 1, CaptureRule::Allowed);
-                    self.walk(&mut moves, piece, from, |x| x + 1, |y| y + 1, CaptureRule::Allowed);
-                    self.walk(&mut moves, piece, from, |x| x - 1, |y| y - 1, CaptureRule::Allowed);
-                    self.walk(&mut moves, piece, from, |x| x + 1, |y| y - 1, CaptureRule::Allowed);
-                    self.walk(&mut moves, piece, from, |x| x - 1, |y| y + 1, CaptureRule::Allowed);
+                    self.walk(moves, piece, from, |x| x + 1, |_| 0, CaptureRule::Allowed);
+                    self.walk(moves, piece, from, |x| x - 1, |_| 0, CaptureRule::Allowed);
+                    self.walk(moves, piece, from, |_| 0, |y| y + 1, CaptureRule::Allowed);
+                    self.walk(moves, piece, from, |_| 0, |y| y - 1, CaptureRule::Allowed);
+                    self.walk(moves, piece, from, |x| x + 1, |y| y + 1, CaptureRule::Allowed);
+                    self.walk(moves, piece, from, |x| x - 1, |y| y - 1, CaptureRule::Allowed);
+                    self.walk(moves, piece, from, |x| x + 1, |y| y - 1, CaptureRule::Allowed);
+                    self.walk(moves, piece, from, |x| x - 1, |y| y + 1, CaptureRule::Allowed);
                 }
                 Piece { piece_type: PieceType::Knight, .. } => {
-                    self.try_add_move(&mut moves, piece, from, 1, -2, CaptureRule::Allowed, false);
-                    self.try_add_move(&mut moves, piece, from, 1, 2, CaptureRule::Allowed, false);
-                    self.try_add_move(&mut moves, piece, from, -1, -2, CaptureRule::Allowed, false);
-                    self.try_add_move(&mut moves, piece, from, -1, 2, CaptureRule::Allowed, false);
-                    self.try_add_move(&mut moves, piece, from, -2, 1, CaptureRule::Allowed, false);
-                    self.try_add_move(&mut moves, piece, from, 2, 1, CaptureRule::Allowed, false);
-                    self.try_add_move(&mut moves, piece, from, -2, -1, CaptureRule::Allowed, false);
-                    self.try_add_move(&mut moves, piece, from, 2, -1, CaptureRule::Allowed, false);
+                    self.try_add_move(moves, piece, from, 1, -2, CaptureRule::Allowed, false);
+                    self.try_add_move(moves, piece, from, 1, 2, CaptureRule::Allowed, false);
+                    self.try_add_move(moves, piece, from, -1, -2, CaptureRule::Allowed, false);
+                    self.try_add_move(moves, piece, from, -1, 2, CaptureRule::Allowed, false);
+                    self.try_add_move(moves, piece, from, -2, 1, CaptureRule::Allowed, false);
+                    self.try_add_move(moves, piece, from, 2, 1, CaptureRule::Allowed, false);
+                    self.try_add_move(moves, piece, from, -2, -1, CaptureRule::Allowed, false);
+                    self.try_add_move(moves, piece, from, 2, -1, CaptureRule::Allowed, false);
                 }
                 Piece { piece_type: PieceType::King, color } => {
-                    self.try_add_move(&mut moves, piece, from, 0, 1, CaptureRule::Allowed, false);
-                    self.try_add_move(&mut moves, piece, from, 0, -1, CaptureRule::Allowed, false);
-                    self.try_add_move(&mut moves, piece, from, 1, -1, CaptureRule::Allowed, false);
-                    self.try_add_move(&mut moves, piece, from, 1, 0, CaptureRule::Allowed, false);
-                    self.try_add_move(&mut moves, piece, from, 1, 1, CaptureRule::Allowed, false);
-                    self.try_add_move(&mut moves, piece, from, -1, 0, CaptureRule::Allowed, false);
-                    self.try_add_move(&mut moves, piece, from, -1, 1, CaptureRule::Allowed, false);
-                    self.try_add_move(&mut moves, piece, from, -1, -1, CaptureRule::Allowed, false);
+                    self.try_add_move(moves, piece, from, 0, 1, CaptureRule::Allowed, false);
+                    self.try_add_move(moves, piece, from, 0, -1, CaptureRule::Allowed, false);
+                    self.try_add_move(moves, piece, from, 1, -1, CaptureRule::Allowed, false);
+                    self.try_add_move(moves, piece, from, 1, 0, CaptureRule::Allowed, false);
+                    self.try_add_move(moves, piece, from, 1, 1, CaptureRule::Allowed, false);
+                    self.try_add_move(moves, piece, from, -1, 0, CaptureRule::Allowed, false);
+                    self.try_add_move(moves, piece, from, -1, 1, CaptureRule::Allowed, false);
+                    self.try_add_move(moves, piece, from, -1, -1, CaptureRule::Allowed, false);
 
                     let can_castle = match color {
                         Color::White => self.white_can_castle,
@@ -366,14 +430,16 @@ impl Board {
                     };
 
                     if can_castle {
-                        self.try_add_lefthand_castle(&mut moves, piece, from);
-                        self.try_add_righthand_castle(&mut moves, piece, from);
+                        self.try_add_lefthand_castle(moves, piece, from);
+                        self.try_add_righthand_castle(moves, piece, from);
                     }
                 }
             };
 
-            return Some(moves);
-        });
+            return true;
+        }
+
+        return false;
     }
 
     fn walk<X, Y>(&self, moves: &mut Vec<Move>, piece: Piece, from: Coord, get_x: X, get_y: Y, capture_rule: CaptureRule) -> ()
@@ -430,8 +496,6 @@ impl Board {
 
             let distance = from.distance(victim);
 
-            println!("distance: {distance:?}");
-
             if (distance.0 != -1 || distance.0 != 1) && distance.1 != 0 {
                 return;
             }
@@ -483,11 +547,11 @@ impl Board {
         }
     }
 
-    pub fn exec_move(&mut self, mv: &Move) -> Result<(), String> {
+    pub fn exec_move(&mut self, mv: &Move) -> Result<()> {
         let from_offset = mv.from.to_offset();
 
         return match self.pieces[from_offset] {
-            None => Err(format!("No piece at {}", mv.from)),
+            None => Err(anyhow!("No piece at {}", mv.from)),
             Some(piece) => {
                 let to_offset = mv.to.to_offset();
 
@@ -497,6 +561,8 @@ impl Board {
                 self.set_castling_rule(&piece);
                 self.set_enpassant_target(&piece, &mv);
                 self.kill_en_passant_victim(&mv);
+                self.set_check(&mv);
+                self.remove_check();
                 self.execute_castle(&mv)?;
 
                 self.turn = self.turn.invert();
@@ -524,9 +590,9 @@ impl Board {
         }
     }
 
-    fn execute_castle(&mut self, mv: &Move) -> Result<(), String> {
+    fn execute_castle(&mut self, mv: &Move) -> Result<()> {
         if let Some(castle) = &mv.castle {
-            return self.exec_move(&*castle);
+            return self.exec_move(&castle);
         }
 
         return Ok(());
@@ -556,4 +622,45 @@ impl Board {
         }
     }
 
+    fn set_check(&mut self, mv: &Move) {
+        let opponent_color = self.turn.invert();
+
+        let is_checked = match opponent_color {
+            Color::White => self.white_checked,
+            Color::Black => self.black_checked,
+        };
+
+        if is_checked {
+            return;
+        }
+
+        let mut moves = Vec::new();
+        if self.get_available_moves_core(&mut moves, mv.to, self.turn) {
+            for next_move in moves {
+                if self.is_checking_move(&next_move) {
+                    match opponent_color {
+                        Color::White => self.white_checked = true,
+                        Color::Black => self.black_checked = true,
+                    };
+                }
+            }
+        }
+    }
+
+    fn remove_check(&mut self) {
+        let is_checked = match self.turn {
+            Color::White => &mut self.white_checked,
+            Color::Black => &mut self.black_checked
+        };
+
+        *is_checked = false;
+    }
+
+    fn is_checking_move(&self, mv: &Move) -> bool {
+        if let Some(Piece { piece_type: PieceType::King, .. }) = self.peek(mv.to) {
+            return true;
+        }
+
+        return false;
+    }
 }
