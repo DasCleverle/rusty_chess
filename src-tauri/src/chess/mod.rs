@@ -1,217 +1,15 @@
-// TODO: castling should not change self.turn
-
-use serde::{de::Visitor, Deserialize, Deserializer, Serialize};
-use std::{fmt::Display, rc::Rc};
+mod coord;
+mod r#move;
+mod piece;
 
 use anyhow::anyhow;
 use anyhow::Result;
 
 use crate::fen;
 
-#[derive(Debug, Copy, Clone)]
-pub struct Coord {
-    pub column: char,
-    pub row: u8,
-}
-
-fn is_valid_coord(row: u8, column: char) -> bool {
-    row >= 1 && row <= 8 && column as u8 >= b'a' && column as u8 <= b'h'
-}
-
-impl Coord {
-    pub fn new(column: char, row: u8) -> Coord {
-        Coord { column, row }
-    }
-
-    pub fn from_str(str: &str) -> Option<Coord> {
-        if str.len() != 2 {
-            None
-        } else {
-            let mut iter = str.chars();
-            let column = iter.next()?;
-            let row = iter.next()?.to_digit(10)? as u8;
-
-            Some(Coord { column, row })
-        }
-    }
-
-    pub fn from_offset(offset: usize) -> Option<Coord> {
-        let row = (offset % 8 + 1) as u8;
-        let column = (b'a' + (offset as f32 / 8.0).floor() as u8) as char;
-
-        if !is_valid_coord(row, column) {
-            return None;
-        }
-
-        return Some(Coord { row, column });
-    }
-
-    fn to_offset(&self) -> usize {
-        ((self.column as u8 - b'a') * 8 + self.row - 1) as usize
-    }
-
-    pub fn translate(&self, x: i8, y: i8) -> Option<Coord> {
-        let column: char = (self.column as i8 + x) as u8 as char;
-        let row = ((self.row as i8) + y) as u8;
-
-        if !is_valid_coord(row, column) {
-            return None;
-        }
-
-        return Some(Coord { row, column });
-    }
-
-    pub fn distance(&self, other: Coord) -> (i8, i8) {
-        let x = (self.column as i8) - (other.column as i8);
-        let y = (self.row as i8) - (other.row as i8);
-
-        return (x, y);
-    }
-}
-
-impl Display for Coord {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}{}", self.column, self.row)
-    }
-}
-
-impl Serialize for Coord {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.collect_str(self)
-    }
-}
-
-struct CoordVisitor;
-
-impl<'de> Visitor<'de> for CoordVisitor {
-    type Value = Coord;
-
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        formatter.write_str("a lowercase string in the form '{column}{row}' (e.g 'a3')")
-    }
-
-    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-    where
-        E: serde::de::Error,
-    {
-        match Coord::from_str(v) {
-            Some(value) => Ok(value),
-            None => Err(serde::de::Error::invalid_value(serde::de::Unexpected::Str(v), &self)),
-        }
-    }
-}
-
-impl<'de> Deserialize<'de> for Coord {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        deserializer.deserialize_str(CoordVisitor)
-    }
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Serialize, strum_macros::IntoStaticStr, strum_macros::Display)]
-pub enum Color {
-    White,
-    Black,
-}
-
-impl Color {
-    pub fn invert(&self) -> Self {
-        match self {
-            Color::White => Color::Black,
-            Color::Black => Color::White,
-        }
-    }
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, strum_macros::IntoStaticStr)]
-pub enum PieceType {
-    Rook,
-    Knight,
-    Bishop,
-    Queen,
-    King,
-    Pawn,
-}
-
-#[derive(Debug, Copy, Clone)]
-pub struct Piece {
-    piece_type: PieceType,
-    color: Color,
-}
-
-impl Piece {
-    pub fn new(piece_type: PieceType, color: Color) -> Self {
-        Self { piece_type, color }
-    }
-}
-
-impl Display for Piece {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.color.into())?;
-        f.write_str(self.piece_type.into())
-    }
-}
-
-impl Serialize for Piece {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.collect_str(self)
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Move {
-    pub from: Coord,
-    pub to: Coord,
-    pub castle: Option<Rc<Move>>,
-    pub allows_en_passant: bool,
-    pub en_passant_victim: Option<Coord>,
-}
-
-impl Move {
-    fn new(from: Coord, to: Coord, allows_en_passant: bool) -> Self {
-        return Move {
-            from,
-            to,
-            castle: None,
-            allows_en_passant,
-            en_passant_victim: None,
-        };
-    }
-
-    fn new_castling(from: Coord, to: Coord, rook_from: Coord, rook_to: Coord) -> Self {
-        return Move {
-            from,
-            to,
-            castle: Some(Rc::new(Move::new(rook_from, rook_to, false))),
-            allows_en_passant: false,
-            en_passant_victim: None,
-        };
-    }
-
-    fn new_en_passant(from: Coord, to: Coord, victim: Coord) -> Self {
-        return Move {
-            from,
-            to,
-            castle: None,
-            allows_en_passant: false,
-            en_passant_victim: Some(victim),
-        };
-    }
-}
-
-impl Display for Move {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} -> {}", self.from, self.to)
-    }
-}
+pub use self::coord::Coord;
+pub use self::piece::{Color, Piece, PieceType};
+pub use self::r#move::Move;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 enum CaptureRule {
@@ -548,28 +346,28 @@ impl Board {
     }
 
     pub fn exec_move(&mut self, mv: &Move) -> Result<()> {
-        let from_offset = mv.from.to_offset();
-
-        return match self.pieces[from_offset] {
-            None => Err(anyhow!("No piece at {}", mv.from)),
+        return match self.pieces[mv.from.to_offset()] {
             Some(piece) => {
-                let to_offset = mv.to.to_offset();
-
-                self.pieces[from_offset] = None;
-                self.pieces[to_offset] = Some(piece);
+                self.move_piece(piece, &mv);
 
                 self.set_castling_rule(&piece);
                 self.set_enpassant_target(&piece, &mv);
                 self.kill_en_passant_victim(&mv);
                 self.set_check(&mv);
                 self.remove_check();
-                self.execute_castle(&mv)?;
+                self.execute_castle(&mv);
 
                 self.turn = self.turn.invert();
 
                 return Ok(());
             }
+            None => Err(anyhow!("No piece at {}", mv.from)),
         };
+    }
+
+    fn move_piece(&mut self, piece: Piece, mv: &Move) {
+        self.pieces[mv.from.to_offset()] = None;
+        self.pieces[mv.to.to_offset()] = Some(piece);
     }
 
     fn set_castling_rule(&mut self, piece: &Piece) {
@@ -590,12 +388,12 @@ impl Board {
         }
     }
 
-    fn execute_castle(&mut self, mv: &Move) -> Result<()> {
+    fn execute_castle(&mut self, mv: &Move) {
         if let Some(castle) = &mv.castle {
-            return self.exec_move(&castle);
+            if let Some(piece) = self.pieces[mv.from.to_offset()] {
+                self.move_piece(piece, castle);
+            }
         }
-
-        return Ok(());
     }
 
     fn set_enpassant_target(&mut self, piece: &Piece, mv: &Move) {
@@ -605,9 +403,10 @@ impl Board {
         }
 
         let target = match piece.color {
-            Color::White => mv.to.translate(0, -1).unwrap(),
-            Color::Black => mv.to.translate(0, 1).unwrap(),
-        };
+            Color::White => mv.to.translate(0, -1),
+            Color::Black => mv.to.translate(0, 1),
+        }
+        .expect("en passant target to be a valid coord");
 
         self.en_passant_target = Some(EnPassantTarget {
             color: piece.color.invert(),
@@ -650,7 +449,7 @@ impl Board {
     fn remove_check(&mut self) {
         let is_checked = match self.turn {
             Color::White => &mut self.white_checked,
-            Color::Black => &mut self.black_checked
+            Color::Black => &mut self.black_checked,
         };
 
         *is_checked = false;
