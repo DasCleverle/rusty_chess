@@ -1,6 +1,8 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+#[macro_use] extern crate lazy_static;
+
 mod chess;
 mod fen;
 
@@ -91,7 +93,7 @@ fn exec_move(mv: Move, app: AppHandle, state: State<BoardState>) -> CommandResul
 #[tauri::command]
 fn apply_fen(fen: &str, app: AppHandle, state: State<BoardState>) -> CommandResult {
     mutate_board(app, state, |board| {
-        board.apply_fen(fen);
+        board.apply_fen(fen)?;
         return Ok(());
     })?;
 

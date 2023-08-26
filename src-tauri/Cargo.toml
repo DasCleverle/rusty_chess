@@ -19,9 +19,14 @@ serde_json = "1.0"
 thiserror = "1.0.47"
 strum = "0.25.0"
 strum_macros = "0.25.2"
-anyhow = "1.0.75"
+anyhow = { version = "1.0.75", features = ["backtrace"] }
+lazy_static = "1.4.0"
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem
 # DO NOT REMOVE!!
 custom-protocol = ["tauri/custom-protocol"]
+
+[profile.test]
+opt-level = 3
+debug = "line-tables-only"

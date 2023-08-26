@@ -113,18 +113,18 @@ impl Coord {
         return Ok(offset);
     }
 
-    pub fn move_mut(&mut self, row: isize, column: isize) -> Result<()> {
+    pub fn mv_mut(&mut self, row: isize, column: isize) -> Result<()> {
         let offset = self.get_move_offset(row, column)?;
         self.offset = self.offset as isize + offset;
 
         return Ok(());
     }
 
-    pub fn move_cpy(&self, row: isize, column: isize) -> Result<Self> {
+    pub fn mv(&self, row: isize, column: isize) -> Result<Self> {
         let offset = self.get_move_offset(row, column)?;
 
         return Ok(Coord {
-            offset: self.offset as isize + offset,
+            offset: self.offset + offset,
         });
     }
 }
@@ -264,17 +264,17 @@ mod tests {
     #[test]
     fn move_south() -> Result<()> {
         let mut one_south = Coord::new('a', 2);
-        one_south.move_mut(0, -1)?;
+        one_south.mv_mut(0, -1)?;
 
         assert_eq!(0, one_south.offset(), "a2 -> a1");
 
         let mut two_south = Coord::new('b', 5);
-        two_south.move_mut(0, -2)?;
+        two_south.mv_mut(0, -2)?;
 
         assert_eq!(17, two_south.offset(), "b5 -> b3");
 
         let mut seven_south = Coord::new('h', 8);
-        seven_south.move_mut(0, -7)?;
+        seven_south.mv_mut(0, -7)?;
 
         assert_eq!(7, seven_south.offset(), "h8 -> h1");
 
@@ -284,17 +284,17 @@ mod tests {
     #[test]
     fn move_east() -> Result<()> {
         let mut one_east = Coord::new('a', 2);
-        one_east.move_mut(1, 0)?;
+        one_east.mv_mut(1, 0)?;
 
         assert_eq!(9, one_east.offset(), "a2 -> b2");
 
         let mut two_east = Coord::new('b', 5);
-        two_east.move_mut(2, 0)?;
+        two_east.mv_mut(2, 0)?;
 
         assert_eq!(35, two_east.offset(), "b5 -> d5");
 
         let mut seven_east = Coord::new('a', 4);
-        seven_east.move_mut(7, 0)?;
+        seven_east.mv_mut(7, 0)?;
 
         assert_eq!(31, seven_east.offset(), "a4 -> h4");
 
