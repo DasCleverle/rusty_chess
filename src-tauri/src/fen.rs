@@ -27,7 +27,7 @@ pub fn parse_fen(fen_str: &str) -> Result<Vec<FenItem>> {
     for (i, c) in fen_str.chars().take_while(|c| !c.is_whitespace()).enumerate() {
         match c {
             '/' => {
-                coord.move_mut(-(coord.column_index() as isize), -1)?;
+                coord.mv_mut(-(coord.column_index() as isize), -1)?;
                 found_piece_in_a = false;
             }
             'A'..='Z' | 'a'..='z' => {
@@ -35,7 +35,7 @@ pub fn parse_fen(fen_str: &str) -> Result<Vec<FenItem>> {
 
                 if column_index != 0 && column_index != 7 {
                     if !found_piece_in_a {
-                        coord.move_mut(1, 0)?;
+                        coord.mv_mut(1, 0)?;
                     }
 
                     found_piece_in_a = false;
@@ -49,19 +49,19 @@ pub fn parse_fen(fen_str: &str) -> Result<Vec<FenItem>> {
                 }
 
                 if column_index == 0 {
-                    coord.move_mut(1, 0)?;
+                    coord.mv_mut(1, 0)?;
                     found_piece_in_a = true;
                 }
             }
             '8' => {
-                coord.move_mut(7, 0)?;
+                coord.mv_mut(7, 0)?;
                 found_piece_in_a = false;
             }
             '1'..='7' => {
                 let free_squares = c.to_digit(10).unwrap() as isize;
                 let free_squares = if i > 0 && !found_piece_in_a { free_squares } else { free_squares - 1 };
 
-                coord.move_mut(free_squares, 0)?;
+                coord.mv_mut(free_squares, 0)?;
                 found_piece_in_a = false;
             }
             _ => return Err(FenError::InvalidCharacter(c).into()),
