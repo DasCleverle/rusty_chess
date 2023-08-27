@@ -19,12 +19,12 @@ impl Color {
 
 #[derive(Debug, Copy, Clone, PartialEq, strum_macros::IntoStaticStr)]
 pub enum PieceType {
+    Pawn,
     Rook,
     Knight,
     Bishop,
     Queen,
     King,
-    Pawn,
 }
 
 #[derive(Debug, Copy, Clone)]
