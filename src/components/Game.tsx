@@ -1,38 +1,35 @@
 import { useEffect, useState } from "react";
-import { Color, Coord, Move, Piece, toCoordFromXY, toOffset } from "../chess";
+import { Color, Coord, Move, Piece, toCoordFromXY } from "../chess";
 import { BoardPayload, executeMove, getAvailableMoves, getBoard } from "../commands";
 import { Square } from "./Square";
 import { listen } from "@tauri-apps/api/event";
 
 interface Row {
     row: number,
-    squares: Square[];
+    pieces: Piece[];
 }
 
-interface Square {
-    coord: Coord,
-    piece?: Piece,
-}
-
-function transformRows(pieces: Piece[]) {
+function transformRows(allPieces: Piece[]): Row[] {
     const rows = [];
 
     for (let r = 0; r < 8; r++) {
-        let squares = [];
+        let pieces = new Array(8);
 
         for (let c = 0; c < 8; c++) {
             const coord = toCoordFromXY(c, r);
-            const offset = toOffset(coord);
+            const piece = allPieces.find(p => p.coord == coord);
 
-            squares.push({
-                coord,
-                piece: pieces[offset],
-            } satisfies Square);
+            if (piece) {
+                pieces[c] = piece;
+            }
+            else {
+                pieces[c] = { coord };
+            }
         }
 
         rows.push({
             row: r,
-            squares
+            pieces
         });
     }
 
@@ -68,15 +65,15 @@ export function Game() {
         init();
     }, []);
 
-    const handleSquareClick = async (square: Square) => {
+    const handleSquareClick = async (piece: Piece) => {
         if (selected) {
-            if (selected == square.coord) {
+            if (selected == piece.coord) {
                 setSelected(null);
                 setMoves([]);
                 return;
             }
 
-            const move = moves.find(m => m.to == square.coord);
+            const move = moves.find(m => m.to == piece.coord);
 
             if (move) {
                 await executeMove(move);
@@ -87,7 +84,7 @@ export function Game() {
             }
         }
 
-        const availableMoves = await getAvailableMoves(square.coord);
+        const availableMoves = await getAvailableMoves(piece.coord);
 
         if (availableMoves.length === 0) {
             setSelected(null);
@@ -95,7 +92,7 @@ export function Game() {
             return;
         }
 
-        setSelected(square.coord);
+        setSelected(piece.coord);
         setMoves(availableMoves);
     }
 
@@ -128,14 +125,15 @@ export function Game() {
                     <div className="row" key={row.row}>
                         <div className="rank-label">{row.row + 1}</div>
 
-                        {row.squares.map(square =>
+                        {row.pieces.map(piece =>
                             <Square
-                                key={square.coord}
-                                coord={square.coord}
-                                piece={square.piece}
-                                isSelected={selected === square.coord}
-                                isTarget={moves.some(m => m.to === square.coord)}
-                                onClick={() => handleSquareClick(square)}
+                                key={piece.coord}
+                                coord={piece.coord}
+                                pieceType={piece.pieceType}
+                                color={piece.color}
+                                isSelected={selected === piece.coord}
+                                isTarget={moves.some(m => m.to === piece.coord)}
+                                onClick={() => handleSquareClick(piece)}
                             />
                         )}
                     </div>

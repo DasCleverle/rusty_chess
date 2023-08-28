@@ -1,31 +1,19 @@
-import { Coord, Piece } from "../chess";
+import { Color, Coord, PieceType } from "../chess";
 
 interface SquareProps {
     isTarget: boolean;
     isSelected: boolean;
     coord: Coord;
-    piece?: Piece;
+    pieceType?: PieceType;
+    color?: Color;
     onClick: () => void;
 }
 
-function getImageName(piece: Piece) {
-    let str = '';
-
-    for (let i = 0; i < piece.length; i++) {
-        const c = piece.charAt(i);
-
-        if (i !== 0 && c === c.toUpperCase()) {
-            str += '_' + c.toLowerCase();
-        }
-        else {
-            str += c;
-        }
-    }
-
-    return str;
+function getImageName(color: Color, piece: PieceType) {
+    return `${color.toLowerCase()}_${piece.toLowerCase()}`;
 }
 
-export function Square({ isTarget, isSelected, piece, onClick }: SquareProps) {
+export function Square({ isTarget, isSelected, pieceType, color, onClick }: SquareProps) {
     const classes = ['square'];
 
     if (isSelected) {
@@ -36,14 +24,14 @@ export function Square({ isTarget, isSelected, piece, onClick }: SquareProps) {
         classes.push('target');
     }
 
-    if (piece) {
+    if (pieceType || color) {
         classes.push('occupied');
     }
 
     return (
         <div className={classes.join(' ')} onClick={onClick}>
             <div>
-                {piece ? <img src={`/pieces/${getImageName(piece)}.png`} /> : null}
+                {pieceType && color ? <img src={`/pieces/${getImageName(color, pieceType)}.png`} /> : null}
             </div>
         </div>
     );
