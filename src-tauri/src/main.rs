@@ -10,7 +10,7 @@ mod fen;
 use anyhow::Result;
 
 use std::{
-    borrow::BorrowMut,
+    error::Error,
     sync::{Arc, Mutex},
 };
 
@@ -59,13 +59,14 @@ struct BoardState {
     board: Arc<Mutex<Board>>,
 }
 
-fn mutate_board<T>(app: AppHandle, state: State<BoardState>, mutation: T) -> Result<()>
+fn mutate_board<T, E>(app: AppHandle, state: State<BoardState>, mutation: T) -> Result<()>
 where
-    T: Fn(&mut Board) -> Result<()>,
+    T: Fn(&mut Board) -> Result<(), E>,
+    E: Error + Send + Sync + 'static
 {
     let mut board = get_board(state);
 
-    mutation(board.borrow_mut())?;
+    mutation(&mut *board)?;
     app.emit_all("update", BoardPayload::new(&*board))?;
 
     return Ok(());
@@ -82,8 +83,8 @@ fn get_board_cmd(state: State<BoardState>) -> BoardPayload {
 
 #[tauri::command]
 fn get_available_moves(coord: Coord, state: State<BoardState>) -> CommandResult<Vec<Move>> {
-    let board = get_board(state);
-    let all_moves = chess::moves::get_moves(&*board)?;
+    let mut board = get_board(state);
+    let all_moves = chess::moves::get_moves(&mut *board);
     let moves_from = all_moves.into_iter().filter(|mv| mv.from == coord).collect::<Vec<Move>>();
 
     return Ok(moves_from);
@@ -97,11 +98,7 @@ fn exec_move(mv: Move, app: AppHandle, state: State<BoardState>) -> CommandResul
 
 #[tauri::command]
 fn apply_fen(fen: &str, app: AppHandle, state: State<BoardState>) -> CommandResult {
-    mutate_board(app, state, |board| {
-        board.apply_fen(fen)?;
-        return Ok(());
-    })?;
-
+    mutate_board(app, state, |board| board.apply_fen(fen))?;
     return Ok(());
 }
 
