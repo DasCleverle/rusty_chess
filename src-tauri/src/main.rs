@@ -1,7 +1,8 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-#[macro_use] extern crate lazy_static;
+#[macro_use]
+extern crate lazy_static;
 
 mod chess;
 mod fen;
@@ -37,19 +38,19 @@ type CommandResult<T = ()> = anyhow::Result<T, CommandError>;
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct BoardPayload {
-    pieces: Vec<Option<Piece>>,
+    pieces: Vec<Piece>,
     turn: Color,
     white_checked: bool,
-    black_checked: bool
+    black_checked: bool,
 }
 
 impl BoardPayload {
     pub fn new(board: &Board) -> Self {
         return BoardPayload {
-            pieces: board.pieces().into(),
+            pieces: board.pieces(),
             turn: board.turn(),
             white_checked: board.white_checked(),
-            black_checked: board.black_checked()
+            black_checked: board.black_checked(),
         };
     }
 }
@@ -81,7 +82,11 @@ fn get_board_cmd(state: State<BoardState>) -> BoardPayload {
 
 #[tauri::command]
 fn get_available_moves(coord: Coord, state: State<BoardState>) -> CommandResult<Vec<Move>> {
-    return get_board(state).get_available_moves(coord).map_err(|e| CommandError::Error(e));
+    let board = get_board(state);
+    let all_moves = chess::moves::get_moves(&*board)?;
+    let moves_from = all_moves.into_iter().filter(|mv| mv.from == coord).collect::<Vec<Move>>();
+
+    return Ok(moves_from);
 }
 
 #[tauri::command]

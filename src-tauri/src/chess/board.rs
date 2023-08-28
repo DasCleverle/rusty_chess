@@ -152,13 +152,43 @@ impl Board {
         self.white = BoardSide::new();
         self.black = BoardSide::new();
 
-        let fen_items = fen::parse_fen(fen_str)?;
+        let pieces = fen::parse_fen(fen_str)?;
 
-        for item in fen_items {
-            self.set(item.coord, item.piece);
+        for item in pieces {
+            self.set(item);
         }
 
         return Ok(());
+    }
+
+    pub fn pieces(&self) -> Vec<Piece> {
+        let mut pieces: Vec<Piece> = Vec::new();
+
+        for i in 0..64 {
+            let coord = Coord::from_offset(i);
+
+            if self.white.all.is_set(coord) {
+                let piece_type = self.white.lookup[i];
+
+                pieces.push(Piece {
+                    coord,
+                    piece_type,
+                    color: Color::White,
+                });
+            }
+
+            if self.black.all.is_set(coord) {
+                let piece_type = self.black.lookup[i];
+
+                pieces.push(Piece {
+                    coord,
+                    piece_type,
+                    color: Color::Black,
+                });
+            }
+        }
+
+        return pieces;
     }
 
     pub fn turn(&self) -> Color {
@@ -191,9 +221,9 @@ impl Board {
         };
     }
 
-    fn set(&mut self, coord: Coord, piece: Piece) {
-        self.all.set(coord);
-        self.side_mut(piece.color).set(coord, piece.piece_type);
+    fn set(&mut self, piece: Piece) {
+        self.all.set(piece.coord);
+        self.side_mut(piece.color).set(piece.coord, piece.piece_type);
     }
 
     // pub fn get_all_available_moves(&self, color: Color) -> Result<Vec<Move>> {
@@ -555,28 +585,28 @@ impl Board {
     }
 
     fn set_enpassant_target(&mut self, piece: &Piece, mv: &Move) {
-        if !mv.allows_en_passant {
-            self.en_passant_target = None;
-            return;
-        }
-
-        let target = match piece.color {
-            Color::White => mv.to.mv(0, -1),
-            Color::Black => mv.to.mv(0, 1),
-        }
-        .expect("en passant target to be a valid coord");
-
-        self.en_passant_target = Some(EnPassantTarget {
-            color: piece.color.invert(),
-            target,
-            victim: mv.to,
-        });
+        // if !mv.allows_en_passant {
+        //     self.en_passant_target = None;
+        //     return;
+        // }
+        //
+        // let target = match piece.color {
+        //     Color::White => mv.to.mv(0, -1),
+        //     Color::Black => mv.to.mv(0, 1),
+        // }
+        // .expect("en passant target to be a valid coord");
+        //
+        // self.en_passant_target = Some(EnPassantTarget {
+        //     color: piece.color.invert(),
+        //     target,
+        //     victim: mv.to,
+        // });
     }
 
     fn kill_en_passant_victim(&mut self, mv: &Move) {
-        if let Some(victim) = mv.en_passant_victim {
-            // self.pieces[victim.offset()] = None;
-        }
+        // if let Some(victim) = mv.en_passant_victim {
+        //     self.pieces[victim.offset()] = None;
+        // }
     }
 
     fn set_check(&mut self, mv: &Move) {
