@@ -1,10 +1,10 @@
 use core::fmt;
-use std::ops::{BitAnd, BitOr, BitXor, Not};
+use std::ops::{BitAnd, BitOr, BitXor, Not, BitOrAssign, BitAndAssign};
 
 use super::Coord;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct BitBoard(u64);
+pub struct BitBoard(pub u64);
 
 impl BitBoard {
     pub fn new(bits: u64) -> Self {
@@ -86,6 +86,12 @@ impl IntoIterator for &BitBoard {
 
     fn into_iter(self) -> Self::IntoIter {
         self.to_owned().into_iter()
+    }
+}
+
+impl From<u64> for BitBoard {
+    fn from(value: u64) -> Self {
+        Self(value)
     }
 }
 
@@ -201,10 +207,32 @@ impl Not for &BitBoard {
     }
 }
 
+impl BitOrAssign for BitBoard {
+    fn bitor_assign(&mut self, rhs: Self) {
+        self.0 = self.0 | rhs.0;
+    }
+}
+
+impl BitAndAssign for BitBoard {
+    fn bitand_assign(&mut self, rhs: Self) {
+        self.0 = self.0 & rhs.0;
+    }
+}
+
 impl fmt::Display for BitBoard {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("  ")?;
+
+        for c in 'A'..='H' {
+            write!(f, " {}", c)?;
+        }
+
+        f.write_str("\n")?;
+
         for i in (0..=7).rev() {
             let window = self.0 >> ((i * 8) as u8).swap_bytes();
+
+            write!(f, "{} ", i + 1)?;
 
             for w in 0..8 {
                 if window & (1 << w) == (1 << w) {
