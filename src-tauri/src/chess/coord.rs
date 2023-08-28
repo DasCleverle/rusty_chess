@@ -76,6 +76,13 @@ impl Coord {
         return row as u8;
     }
 
+    pub fn distance(&self, other: Coord) -> (i8, i8) {
+        return (
+            other.column_index() as i8 - self.column_index() as i8,
+            other.row() as i8 - self.row() as i8
+        );
+    }
+
     pub fn mv_mut(&mut self, row: isize, column: isize) -> bool {
         if let Some(offset) = self.get_move_offset(row, column) {
             self.offset = self.offset as isize + offset;
