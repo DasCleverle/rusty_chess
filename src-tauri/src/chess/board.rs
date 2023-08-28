@@ -1,4 +1,4 @@
-use crate::fen;
+use crate::fen::{self, FenError};
 
 use super::bitboard::BitBoard;
 use super::coord::Coord;
@@ -7,47 +7,50 @@ use super::piece::{Color, Piece, PieceType};
 
 use anyhow::Result;
 
-#[derive(Debug, Copy, Clone, PartialEq)]
-enum CaptureRule {
-    Disallowed,
-    Allowed,
-    MustCapture,
+const A1: Coord = Coord { offset: 0 };
+const H1: Coord = Coord { offset: 7 };
+const A8: Coord = Coord { offset: 56 };
+const H8: Coord = Coord { offset: 63 };
+
+#[derive(Debug, thiserror::Error)]
+pub enum MoveErr {
+    #[error("Could not find a piece at {0}")]
+    NoPieceAt(Coord),
+
+    #[error("Cannot move opponent's piece")]
+    CannotMoveOpponentPiece,
+
+    #[error("Cannot capture own piece")]
+    CannotCaptureOwnPiece,
+
+    #[error("Cannot capture king")]
+    CannotCaptureKing,
 }
 
-#[derive(Clone)]
-struct EnPassantTarget {
-    color: Color,
-    target: Coord,
-    victim: Coord,
-}
-
-#[derive(Clone, Copy)]
-struct Square {
-    piece_type: PieceType,
-    index: usize,
-}
-
-// TODO: methods for fields
 pub struct BoardSide {
     lookup: [PieceType; 64],
-    pub all: BitBoard,
-    pub pawns: BitBoard,
-    pub rooks: BitBoard,
-    pub knights: BitBoard,
-    pub bishops: BitBoard,
-    pub queens: BitBoard,
-    pub king: Coord,
 
-    pub checked: bool,
+    all: BitBoard,
+    pawns: BitBoard,
+    rooks: BitBoard,
+    bishops: BitBoard,
+    knights: BitBoard,
+    queens: BitBoard,
+    king: BitBoard,
 
-    pub can_castle_left: bool,
-    pub can_castle_right: bool,
+    attacked_squares: BitBoard,
+
+    checked: bool,
+
+    can_castle_left: bool,
+    can_castle_right: bool,
 }
 
 impl BoardSide {
     fn new() -> Self {
         BoardSide {
             lookup: [PieceType::Pawn; 64],
+
             all: Default::default(),
             pawns: Default::default(),
             rooks: Default::default(),
@@ -56,6 +59,8 @@ impl BoardSide {
             queens: Default::default(),
             king: Default::default(),
 
+            attacked_squares: Default::default(),
+
             checked: false,
 
             can_castle_left: true,
@@ -63,51 +68,105 @@ impl BoardSide {
         }
     }
 
-    fn get_bitboard<'a, K>(&'a mut self, piece_type: PieceType, handle_king: K) -> Option<&'a mut BitBoard>
-    where
-        K: Fn(&'a mut Coord) -> (),
-    {
+    pub fn all(&self) -> &BitBoard {
+        return &self.all;
+    }
+
+    pub fn pawns(&self) -> &BitBoard {
+        return &self.pawns;
+    }
+
+    pub fn rooks(&self) -> &BitBoard {
+        return &self.rooks;
+    }
+
+    pub fn bishops(&self) -> &BitBoard {
+        return &self.bishops;
+    }
+
+    pub fn knights(&self) -> &BitBoard {
+        return &self.knights;
+    }
+
+    pub fn queens(&self) -> &BitBoard {
+        return &self.queens;
+    }
+
+    pub fn king(&self) -> Coord {
+        return self.king.into_iter().next().unwrap();
+    }
+
+    pub fn checked(&self) -> bool {
+        return self.checked;
+    }
+
+    pub fn can_castle_left(&self) -> bool {
+        return self.can_castle_left;
+    }
+
+    pub fn can_castle_right(&self) -> bool {
+        return self.can_castle_right;
+    }
+
+    pub fn attacked_squares(&self) -> &BitBoard {
+        return &self.attacked_squares;
+    }
+
+    pub fn set_attacked_squares(&mut self, attacked_squares: BitBoard) {
+        self.attacked_squares = attacked_squares;
+    }
+
+    fn get_bitboard(&mut self, piece_type: PieceType) -> &mut BitBoard {
         return match piece_type {
-            PieceType::Pawn => Some(&mut self.pawns),
-            PieceType::Rook => Some(&mut self.rooks),
-            PieceType::Knight => Some(&mut self.knights),
-            PieceType::Bishop => Some(&mut self.bishops),
-            PieceType::Queen => Some(&mut self.queens),
-            PieceType::King => {
-                handle_king(&mut self.king);
-                return None;
-            }
+            PieceType::Pawn => &mut self.pawns,
+            PieceType::Rook => &mut self.rooks,
+            PieceType::Knight => &mut self.knights,
+            PieceType::Bishop => &mut self.bishops,
+            PieceType::Queen => &mut self.queens,
+            PieceType::King => &mut self.king,
         };
     }
 
     fn set(&mut self, coord: Coord, piece_type: PieceType) {
-        if let Some(bitboard) = self.get_bitboard(piece_type, |king| *king = coord) {
-            bitboard.set(coord);
-        }
-
+        self.get_bitboard(piece_type).set(coord);
         self.all.set(coord);
         self.lookup[coord.offset()] = piece_type;
     }
 
-    fn capture(&mut self, coord: Coord, piece_type: PieceType) {
-        if let Some(bitboard) = self.get_bitboard(piece_type, |_| panic!("Cannot capture king")) {
-            bitboard.unset(coord);
-            self.all.unset(coord);
-        }
+    fn unset(&mut self, coord: Coord) {
+        self.get_bitboard(self.lookup[coord.offset()]).unset(coord);
+        self.all.unset(coord);
     }
 
-    fn mv(&mut self, from: Coord, to: Coord) {
-        if self.all.is_set(to) {
-            panic!("Cannot capture own piece")
+    fn capture(&mut self, coord: Coord) -> Result<(), MoveErr> {
+        let piece_type = self.lookup[coord.offset()];
+
+        if piece_type == PieceType::King {
+            return Err(MoveErr::CannotCaptureKing);
         }
 
+        self.get_bitboard(piece_type).unset(coord);
+        self.all.unset(coord);
+
+        return Ok(());
+    }
+
+    fn mv(&mut self, from: Coord, to: Coord) -> PieceType {
         let piece_type = self.lookup[from.offset()];
 
-        if let Some(bitboard) = self.get_bitboard(piece_type, |king| *king = to) {
-            bitboard.swap(from, to);
-            self.all.swap(from, to);
-            self.lookup[to.offset()] = piece_type;
-        }
+        match piece_type {
+            PieceType::King => {
+                self.can_castle_left = false;
+                self.can_castle_right = false;
+            }
+            _ => {}
+        };
+
+        self.get_bitboard(piece_type).swap(from, to);
+        self.all.swap(from, to);
+        self.lookup[to.offset()] = piece_type;
+
+        return piece_type;
     }
 }
 
@@ -120,7 +179,7 @@ pub struct Board {
 
     checkmate: Option<Color>,
 
-    en_passant_target: Option<EnPassantTarget>,
+    en_passant_square: Option<Coord>,
 }
 
 impl Board {
@@ -133,7 +192,7 @@ impl Board {
             white: BoardSide::new(),
             black: BoardSide::new(),
 
-            en_passant_target: None,
+            en_passant_square: None,
         }
     }
 
@@ -148,15 +207,27 @@ impl Board {
         Self::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR").expect("start position to be valid")
     }
 
-    pub fn apply_fen(&mut self, fen_str: &str) -> Result<()> {
+    pub fn apply_fen(&mut self, fen_str: &str) -> Result<(), FenError> {
+        self.turn = Color::White;
+        self.checkmate = None;
+
+        self.all = BitBoard::new(0);
         self.white = BoardSide::new();
         self.black = BoardSide::new();
+
+        self.en_passant_square = None;
 
         let pieces = fen::parse_fen(fen_str)?;
 
         for item in pieces {
             self.set(item);
         }
+
+        let _ = super::moves::get_moves(self);
+        self.turn = self.turn.invert();
+
+        let _ = super::moves::get_moves(self);
+        self.turn = self.turn.invert();
 
         return Ok(());
     }
@@ -207,6 +278,26 @@ impl Board {
         return self.black.checked;
     }
 
+    pub fn en_passant_square(&self) -> Option<Coord> {
+        return self.en_passant_square;
+    }
+
+    pub fn turning_side(&self) -> &BoardSide {
+        return self.side(self.turn());
+    }
+
+    pub fn opponent_side(&self) -> &BoardSide {
+        return self.side(self.turn().invert());
+    }
+
+    pub fn turning_side_mut(&mut self) -> &mut BoardSide {
+        return self.side_mut(self.turn());
+    }
+
+    pub fn opponent_side_mut(&mut self) -> &mut BoardSide {
+        return self.side_mut(self.turn().invert());
+    }
+
     pub fn side(&self, color: Color) -> &BoardSide {
         return match color {
             Color::White => &self.white,
@@ -226,439 +317,112 @@ impl Board {
         self.side_mut(piece.color).set(piece.coord, piece.piece_type);
     }
 
-    // pub fn get_all_available_moves(&self, color: Color) -> Result<Vec<Move>> {
-    //     let mut moves: Vec<Move> = Vec::new();
-    //
-    //     // for i in 0..self.pieces.len() {
-    //     //     let square = &self.pieces[i];
-    //     //
-    //     //     if let Some(Piece { color: piece_color, .. }) = square {
-    //     //         if piece_color == &color {
-    //     //             let coord = Coord::from_offset(i);
-    //     //             moves.extend(self.get_available_moves(coord)?);
-    //     //         }
-    //     //     }
-    //     // }
-    //
-    //     return Ok(moves);
-    // }
-    //
-    // fn get_all_available_moves_core(&self, color: Color) -> Vec<Move> {
-    //     let mut moves: Vec<Move> = Vec::new();
-    //
-    //     // for i in 0..self.pieces.len() {
-    //     //     let square = &self.pieces[i];
-    //     //
-    //     //     if let Some(Piece { color: piece_color, .. }) = square {
-    //     //         if piece_color == &color {
-    //     //             let coord = Coord::from_offset(i);
-    //     //             self.get_available_moves_core(&mut moves, coord, color);
-    //     //         }
-    //     //     }
-    //     // }
-    //
-    //     return moves;
-    // }
-    //
-    // pub fn get_available_moves(&self, from: Coord) -> Result<Vec<Move>> {
-    //     let opponent_color = self.turn.invert();
-    //     let mut moves: Vec<Move> = Vec::new();
-    //
-    //     if !self.get_available_moves_core(&mut moves, from, self.turn) {
-    //         return Ok(moves);
-    //     }
-    //
-    //     let len = moves.len();
-    //
-    //     if len == 0 {
-    //         return Ok(moves);
-    //     }
-    //
-    //     let mut i = 0;
-    //
-    //     while i < moves.len() {
-    //         // let mut removed = false;
-    //         // let mut board = self.clone();
-    //         // let mv = &moves[i];
-    //         //
-    //         // board.exec_move(&mv)?;
-    //         //
-    //         // let opponent_responses = board.get_all_available_moves_core(opponent_color);
-    //         //
-    //         // for response in opponent_responses {
-    //         //     if !board.is_checking_move(&response) {
-    //         //         continue;
-    //         //     }
-    //         //
-    //         //     moves.swap_remove(i);
-    //         //     removed = true;
-    //         //     break;
-    //         // }
-    //         //
-    //         // if !removed {
-    //         //     i += 1;
-    //         // }
-    //     }
-    //
-    //     return Ok(moves);
-    // }
-    //
-    // fn get_available_moves_core(&self, moves: &mut Vec<Move>, from: Coord, color: Color) -> bool {
-    //     if let Some(piece) = self.peek(from) {
-    //         if piece.color != color {
-    //             return false;
-    //         }
-    //
-    //         match piece {
-    //             Piece { piece_type: PieceType::Pawn, color } => {
-    //                 let (start_row, mul) = match color {
-    //                     Color::White => (2, 1),
-    //                     Color::Black => (7, -1),
-    //                 };
-    //
-    //                 let added_one_move = self.try_add_move(moves, piece, from, 0, mul, CaptureRule::Disallowed, false);
-    //
-    //                 if from.row() == start_row && added_one_move {
-    //                     self.try_add_move(moves, piece, from, 0, 2 * mul, CaptureRule::Disallowed, true);
-    //                 }
-    //
-    //                 self.try_add_move(moves, piece, from, 1, mul, CaptureRule::MustCapture, false);
-    //                 self.try_add_move(moves, piece, from, -1, mul, CaptureRule::MustCapture, false);
-    //
-    //                 self.try_add_en_passant_move(moves, piece, from);
-    //             }
-    //             Piece { piece_type: PieceType::Rook, .. } => {
-    //                 self.walk(moves, piece, from, |x| x + 1, |_| 0, CaptureRule::Allowed);
-    //                 self.walk(moves, piece, from, |x| x - 1, |_| 0, CaptureRule::Allowed);
-    //                 self.walk(moves, piece, from, |_| 0, |y| y + 1, CaptureRule::Allowed);
-    //                 self.walk(moves, piece, from, |_| 0, |y| y - 1, CaptureRule::Allowed);
-    //             }
-    //             Piece { piece_type: PieceType::Bishop, .. } => {
-    //                 self.walk(moves, piece, from, |x| x + 1, |y| y + 1, CaptureRule::Allowed);
-    //                 self.walk(moves, piece, from, |x| x - 1, |y| y - 1, CaptureRule::Allowed);
-    //                 self.walk(moves, piece, from, |x| x + 1, |y| y - 1, CaptureRule::Allowed);
-    //                 self.walk(moves, piece, from, |x| x - 1, |y| y + 1, CaptureRule::Allowed);
-    //             }
-    //             Piece { piece_type: PieceType::Queen, .. } => {
-    //                 self.walk(moves, piece, from, |x| x + 1, |_| 0, CaptureRule::Allowed);
-    //                 self.walk(moves, piece, from, |x| x - 1, |_| 0, CaptureRule::Allowed);
-    //                 self.walk(moves, piece, from, |_| 0, |y| y + 1, CaptureRule::Allowed);
-    //                 self.walk(moves, piece, from, |_| 0, |y| y - 1, CaptureRule::Allowed);
-    //                 self.walk(moves, piece, from, |x| x + 1, |y| y + 1, CaptureRule::Allowed);
-    //                 self.walk(moves, piece, from, |x| x - 1, |y| y - 1, CaptureRule::Allowed);
-    //                 self.walk(moves, piece, from, |x| x + 1, |y| y - 1, CaptureRule::Allowed);
-    //                 self.walk(moves, piece, from, |x| x - 1, |y| y + 1, CaptureRule::Allowed);
-    //             }
-    //             Piece { piece_type: PieceType::Knight, .. } => {
-    //                 self.try_add_move(moves, piece, from, 1, -2, CaptureRule::Allowed, false);
-    //                 self.try_add_move(moves, piece, from, 1, 2, CaptureRule::Allowed, false);
-    //                 self.try_add_move(moves, piece, from, -1, -2, CaptureRule::Allowed, false);
-    //                 self.try_add_move(moves, piece, from, -1, 2, CaptureRule::Allowed, false);
-    //                 self.try_add_move(moves, piece, from, -2, 1, CaptureRule::Allowed, false);
-    //                 self.try_add_move(moves, piece, from, 2, 1, CaptureRule::Allowed, false);
-    //                 self.try_add_move(moves, piece, from, -2, -1, CaptureRule::Allowed, false);
-    //                 self.try_add_move(moves, piece, from, 2, -1, CaptureRule::Allowed, false);
-    //             }
-    //             Piece { piece_type: PieceType::King, color } => {
-    //                 self.try_add_move(moves, piece, from, 0, 1, CaptureRule::Allowed, false);
-    //                 self.try_add_move(moves, piece, from, 0, -1, CaptureRule::Allowed, false);
-    //                 self.try_add_move(moves, piece, from, 1, -1, CaptureRule::Allowed, false);
-    //                 self.try_add_move(moves, piece, from, 1, 0, CaptureRule::Allowed, false);
-    //                 self.try_add_move(moves, piece, from, 1, 1, CaptureRule::Allowed, false);
-    //                 self.try_add_move(moves, piece, from, -1, 0, CaptureRule::Allowed, false);
-    //                 self.try_add_move(moves, piece, from, -1, 1, CaptureRule::Allowed, false);
-    //                 self.try_add_move(moves, piece, from, -1, -1, CaptureRule::Allowed, false);
-    //
-    //                 let (can_castle_left, can_castle_right) = match color {
-    //                     Color::White => (self.white.can_castle_left, self.white.can_castle_right),
-    //                     Color::Black => (self.black.can_castle_left, self.black.can_castle_right),
-    //                 };
-    //
-    //                 if can_castle_left {
-    //                     self.try_add_lefthand_castle(moves, piece, from);
-    //                 }
-    //
-    //                 if can_castle_right {
-    //                     self.try_add_righthand_castle(moves, piece, from);
-    //                 }
-    //             }
-    //         };
-    //
-    //         return true;
-    //     }
-    //
-    //     return false;
-    // }
-    //
-    // fn walk<X, Y>(&self, moves: &mut Vec<Move>, piece: Piece, from: Coord, get_x: X, get_y: Y, capture_rule: CaptureRule) -> ()
-    // where
-    //     X: Fn(isize) -> isize,
-    //     Y: Fn(isize) -> isize,
-    // {
-    //     let mut x = get_x(0);
-    //     let mut y = get_y(0);
-    //
-    //     while self.try_add_move(moves, piece, from, x, y, capture_rule, false) {
-    //         x = get_x(x);
-    //         y = get_y(y);
-    //     }
-    // }
-    //
-    // fn try_add_move(
-    //     &self,
-    //     moves: &mut Vec<Move>,
-    //     piece: Piece,
-    //     from: Coord,
-    //     x: isize,
-    //     y: isize,
-    //     capture_rule: CaptureRule,
-    //     allows_en_passant: bool,
-    // ) -> bool {
-    //     if let Ok(to) = from.mv(x, y) {
-    //         return match self.peek(to) {
-    //             Some(target) if target.color != piece.color => {
-    //                 if capture_rule == CaptureRule::Disallowed {
-    //                     return false;
-    //                 }
-    //
-    //                 moves.push(Move::new(from, to, allows_en_passant));
-    //                 return false;
-    //             }
-    //             Some(_) => false,
-    //             None if capture_rule == CaptureRule::MustCapture => false,
-    //             None => {
-    //                 moves.push(Move::new(from, to, allows_en_passant));
-    //                 return true;
-    //             }
-    //         };
-    //     }
-    //
-    //     return false;
-    // }
-    //
-    // fn try_add_en_passant_move(&self, moves: &mut Vec<Move>, piece: Piece, from: Coord) {
-    //     if let Some(EnPassantTarget { color, target, victim }) = self.en_passant_target {
-    //         if color != piece.color {
-    //             return;
-    //         }
-    //
-    //         let distance = from.distance(victim);
-    //
-    //         if (distance.0 != -1 || distance.0 != 1) && distance.1 != 0 {
-    //             return;
-    //         }
-    //
-    //         moves.push(Move::new_en_passant(from, target, victim));
-    //     }
-    // }
-    //
-    // fn try_add_lefthand_castle(&self, moves: &mut Vec<Move>, piece: Piece, from: Coord) {
-    //     if let (Ok(one_left), Ok(two_left), Ok(three_left), Ok(four_left)) = (from.mv(-1, 0), from.mv(-2, 0), from.mv(-3, 0), from.mv(-4, 0)) {
-    //         if let (
-    //             None,
-    //             None,
-    //             None,
-    //             Some(Piece {
-    //                 piece_type: PieceType::Rook,
-    //                 color: rook_color,
-    //             }),
-    //         ) = (self.peek(one_left), self.peek(two_left), self.peek(three_left), self.peek(four_left))
-    //         {
-    //             if rook_color != piece.color {
-    //                 return;
-    //             }
-    //
-    //             moves.push(Move::new_castling(from, two_left, four_left, one_left));
-    //         }
-    //     }
-    // }
-    //
-    // fn try_add_righthand_castle(&self, moves: &mut Vec<Move>, piece: Piece, from: Coord) {
-    //     if let (Ok(one_right), Ok(two_right), Ok(three_right)) = (from.mv(1, 0), from.mv(2, 0), from.mv(3, 0)) {
-    //         if let (
-    //             None,
-    //             None,
-    //             Some(Piece {
-    //                 piece_type: PieceType::Rook,
-    //                 color: rook_color,
-    //             }),
-    //         ) = (self.peek(one_right), self.peek(two_right), self.peek(three_right))
-    //         {
-    //             if rook_color != piece.color {
-    //                 return;
-    //             }
-    //
-    //             moves.push(Move::new_castling(from, two_right, three_right, one_right));
-    //         }
-    //     }
-    // }
+    pub fn exec_move(&mut self, mv: &Move) -> Result<(), MoveErr> {
+        if !self.all.is_set(mv.from) {
+            return Err(MoveErr::NoPieceAt(mv.from));
+        }
 
-    pub fn exec_move(&mut self, mv: &Move) -> Result<()> {
+        let opponent = self.opponent_side_mut();
+
+        if opponent.all.is_set(mv.from) {
+            return Err(MoveErr::CannotMoveOpponentPiece);
+        }
+
+        if opponent.all.is_set(mv.to) {
+            opponent.capture(mv.to)?;
+        }
+
+        let side = self.turning_side_mut();
+
+        if side.all.is_set(mv.to) {
+            return Err(MoveErr::CannotCaptureOwnPiece);
+        }
+
+        let piece_type = self.mv(mv);
+
+        self.exec_castling(mv);
+        self.set_castling_rights(mv);
+
+        self.exec_en_passant(mv);
+        self.set_enpassant_square(piece_type, mv);
+
+        self.turn = self.turn.invert();
+
         return Ok(());
-        // return match self.pieces[mv.from.offset()] {
-        //     Some(piece) => {
-        //         self.move_piece(piece, &mv);
-        //
-        //         self.set_castling_rule(&piece, &mv);
-        //         self.set_enpassant_target(&piece, &mv);
-        //         self.kill_en_passant_victim(&mv);
-        //         self.set_check(&mv);
-        //         self.remove_check();
-        //         self.execute_castle(&mv);
-        //         self.set_checkmate();
-        //
-        //         self.turn = self.turn.invert();
-        //
-        //         return Ok(());
-        //     }
-        //     None => Err(anyhow!("No piece at {}", mv.from)),
-        // };
     }
 
-    fn move_piece(&mut self, piece: Piece, mv: &Move) {
-        // self.pieces[mv.from.offset()] = None;
-        // self.pieces[mv.to.offset()] = Some(piece);
+    fn set_castling_rights(&mut self, mv: &Move) {
+        if mv.from == A1 || mv.to == A1 {
+            self.white.can_castle_left = false;
+        }
+
+        if mv.from == H1 || mv.to == H1 {
+            self.white.can_castle_right = false;
+        }
+
+        if mv.from == A8 || mv.to == A8 {
+            self.black.can_castle_left = false;
+        }
+
+        if mv.from == H8 || mv.to == H8 {
+            self.black.can_castle_right = false;
+        }
     }
 
-    fn set_castling_rule(&mut self, piece: &Piece, mv: &Move) {
-        // match piece {
-        //     Piece {
-        //         piece_type: PieceType::King,
-        //         color: Color::White,
-        //     } => {
-        //         self.white.can_castle_left = false;
-        //         self.white.can_castle_right = false;
-        //     }
-        //     Piece {
-        //         piece_type: PieceType::King,
-        //         color: Color::Black,
-        //     } => {
-        //         self.white.can_castle_left = false;
-        //         self.white.can_castle_right = false;
-        //     }
-        //     Piece {
-        //         piece_type: PieceType::Rook,
-        //         color: Color::White,
-        //     } if mv.from == LEFT_WHITE_ROOK => {
-        //         self.white.can_castle_left = false;
-        //     }
-        //     Piece {
-        //         piece_type: PieceType::Rook,
-        //         color: Color::White,
-        //     } if mv.from == RIGHT_WHITE_ROOK => {
-        //         self.white.can_castle_right = false;
-        //     }
-        //     Piece {
-        //         piece_type: PieceType::Rook,
-        //         color: Color::Black,
-        //     } if mv.from == LEFT_BLACK_ROOK => {
-        //         self.black.can_castle_left = false;
-        //     }
-        //     Piece {
-        //         piece_type: PieceType::Rook,
-        //         color: Color::Black,
-        //     } if mv.from == RIGHT_BLACK_ROOK => {
-        //         self.black.can_castle_right = false;
-        //     }
-        //     _ => {
-        //         if let Some(Piece { piece_type: PieceType::Rook, .. }) = self.peek(mv.to) {
-        //             match mv.to {
-        //                 LEFT_WHITE_ROOK => self.white.can_castle_left = false,
-        //                 RIGHT_WHITE_ROOK => self.white.can_castle_right = false,
-        //
-        //                 LEFT_BLACK_ROOK => self.black.can_castle_left = false,
-        //                 RIGHT_BLACK_ROOK => self.black.can_castle_right = false,
-        //
-        //                 _ => {}
-        //             }
-        //         }
-        //     }
-        // }
-    }
+    fn exec_castling(&mut self, mv: &Move) {
+        if !mv.castling {
+            return;
+        }
 
-    fn execute_castle(&mut self, mv: &Move) {
-        // if let Some(castle) = &mv.castle {
-        //     if let Some(piece) = self.pieces[mv.from.offset()] {
-        //         self.move_piece(piece, castle);
-        //     }
-        // }
-    }
-
-    fn set_enpassant_target(&mut self, piece: &Piece, mv: &Move) {
-        // if !mv.allows_en_passant {
-        //     self.en_passant_target = None;
-        //     return;
-        // }
-        //
-        // let target = match piece.color {
-        //     Color::White => mv.to.mv(0, -1),
-        //     Color::Black => mv.to.mv(0, 1),
-        // }
-        // .expect("en passant target to be a valid coord");
-        //
-        // self.en_passant_target = Some(EnPassantTarget {
-        //     color: piece.color.invert(),
-        //     target,
-        //     victim: mv.to,
-        // });
-    }
-
-    fn kill_en_passant_victim(&mut self, mv: &Move) {
-        // if let Some(victim) = mv.en_passant_victim {
-        //     self.pieces[victim.offset()] = None;
-        // }
-    }
-
-    fn set_check(&mut self, mv: &Move) {
-        // let opponent_color = self.turn.invert();
-        //
-        // let is_checked = match opponent_color {
-        //     Color::White => self.white.checked,
-        //     Color::Black => self.black.checked,
-        // };
-        //
-        // if is_checked {
-        //     return;
-        // }
-        //
-        // let mut moves = Vec::new();
-        // if self.get_available_moves_core(&mut moves, mv.to, self.turn) {
-        //     for next_move in moves {
-        //         if self.is_checking_move(&next_move) {
-        //             match opponent_color {
-        //                 Color::White => self.white.checked = true,
-        //                 Color::Black => self.black.checked = true,
-        //             };
-        //         }
-        //     }
-        // }
-    }
-
-    fn remove_check(&mut self) {
-        let is_checked = match self.turn {
-            Color::White => &mut self.white.checked,
-            Color::Black => &mut self.black.checked,
+        let is_left = mv.to.column() == 'c';
+        let (from_col, to_col) = if is_left { ('a', 'd') } else { ('h', 'f') };
+        let row = match self.turn() {
+            Color::White => 1,
+            Color::Black => 8,
         };
 
-        *is_checked = false;
+        let from = Coord::new(from_col, row);
+        let to = Coord::new(to_col, row);
+
+        self.mv(&Move::new(from, to));
     }
 
-    fn is_checking_move(&self, mv: &Move) -> bool {
-        return false;
-        // if let Some(Piece { piece_type: PieceType::King, .. }) = self.peek(mv.to) {
-        //     return true;
-        // }
-        //
-        // return false;
+    fn set_enpassant_square(&mut self, piece_type: PieceType, mv: &Move) {
+        if piece_type != PieceType::Pawn {
+            self.en_passant_square = None;
+            return;
+        }
+
+        let distance = mv.from.distance(mv.to).1;
+
+        self.en_passant_square = match distance {
+            2 => mv.from.mv(0, 1),
+            -2 => mv.from.mv(0, -1),
+            _ => None,
+        };
     }
 
-    fn set_checkmate(&mut self) {
-        // let opponent_color = self.turn.invert();
-        // let moves = self.get_all_available_moves_core(opponent_color);
-        //
-        // if moves.len() == 0 {
-        //     self.checkmate = Some(opponent_color);
-        // }
+    fn exec_en_passant(&mut self, mv: &Move) {
+        if !mv.en_passant {
+            return;
+        }
+
+        let victim = match self.turn() {
+            Color::White => mv.to.mv(0, -1),
+            Color::Black => mv.to.mv(0, 1),
+        };
+
+        if let Some(victim) = victim {
+            self.all.unset(victim);
+            self.opponent_side_mut().unset(victim);
+        }
+    }
+
+    fn mv(&mut self, mv: &Move) -> PieceType {
+        self.all.unset(mv.from);
+        self.all.set(mv.to);
+
+        return self.turning_side_mut().mv(mv.from, mv.to);
     }
 }
 
