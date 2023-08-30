@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::fen::{self, FenError};
 
 use super::bitboard::BitBoard;
@@ -188,6 +190,19 @@ impl BoardSide {
     }
 }
 
+fn is_orthogonal(direction: (isize, isize)) -> bool {
+    return direction.0.abs() + direction.1.abs() == 1;
+}
+
+fn is_diagonal(direction: (isize, isize)) -> bool {
+    return direction.0.abs() + direction.1.abs() == 2;
+}
+
+struct LastMove {
+    mv: Move,
+    captured_piece: Option<PieceType>
+}
+
 pub struct Board {
     turn: Color,
 
@@ -199,8 +214,7 @@ pub struct Board {
 
     en_passant_square: Option<Coord>,
 
-    last_captured_piece: Option<PieceType>,
-    last_move: Option<Move>,
+    last_moves: Vec<LastMove>
 }
 
 impl Board {
@@ -215,8 +229,7 @@ impl Board {
 
             en_passant_square: None,
 
-            last_captured_piece: None,
-            last_move: None,
+            last_moves: Vec::with_capacity(10),
         }
     }
 
@@ -241,8 +254,7 @@ impl Board {
 
         self.en_passant_square = None;
 
-        self.last_captured_piece = None;
-        self.last_move = None;
+        self.last_moves.clear();
 
         let pieces = fen::parse_fen(fen_str)?;
 
@@ -366,6 +378,11 @@ impl Board {
     }
 
     pub fn exec_move(&mut self, mv: Move) -> Result<(), MoveErr> {
+        let mut last_move = LastMove {
+            mv,
+            captured_piece: None
+        };
+
         if !self.all.is_set(mv.from) {
             return Err(MoveErr::NoPieceAt(mv.from));
         }
@@ -377,9 +394,7 @@ impl Board {
         }
 
         if opponent.all.is_set(mv.to) {
-            self.last_captured_piece = Some(opponent.capture(mv.to)?);
-        } else {
-            self.last_captured_piece = None;
+            last_move.captured_piece = Some(opponent.capture(mv.to)?);
         }
 
         let side = self.turning_side_mut();
@@ -400,7 +415,6 @@ impl Board {
         self.exec_en_passant(&mv);
         self.set_enpassant_square(piece_type, &mv);
 
-
         self.set_pin_rays(Color::White);
         self.set_pin_rays(Color::Black);
 
@@ -411,13 +425,13 @@ impl Board {
 
         self.set_checkmate();
 
-        self.last_move = Some(mv);
+        self.last_moves.push(last_move);
 
         return Ok(());
     }
 
     pub fn undo_move(&mut self) -> Result<(), MoveErr> {
-        if let Some(mv) = self.last_move {
+        if let Some(LastMove { mv, captured_piece }) = self.last_moves.pop() {
             let reverse_move = Move::new(mv.to, mv.from);
 
             self.winner = None;
@@ -425,7 +439,7 @@ impl Board {
 
             self.mv(&reverse_move);
 
-            if let Some(captured) = self.last_captured_piece {
+            if let Some(captured) = captured_piece {
                 self.all.set(mv.to);
                 self.opponent_side_mut().set(mv.to, captured);
             }
@@ -444,13 +458,13 @@ impl Board {
                 let victim_coord = match self.turn() {
                     Color::White => mv.to.mv(0, -1),
                     Color::Black => mv.to.mv(0, 1),
-                }.expect("victim coord to be valid");
+                }
+                .expect("victim coord to be valid");
 
                 self.all.set(victim_coord);
                 self.opponent_side_mut().set(victim_coord, PieceType::Pawn);
                 self.en_passant_square = Some(mv.to);
-            }
-            else {
+            } else {
                 self.en_passant_square = None;
             }
 
@@ -459,8 +473,6 @@ impl Board {
 
             self.turning_side_mut().attacked_squares = moves::get_attacked_squares(self);
             self.set_check();
-
-            self.last_move = None;
         }
 
         return Ok(());
@@ -647,7 +659,6 @@ impl Board {
                     break;
                 }
 
-
                 if opponent_side.all().is_set(coord) {
                     break;
                 }
@@ -667,81 +678,139 @@ impl Board {
     }
 }
 
-fn is_orthogonal(direction: (isize, isize)) -> bool {
-    return direction.0.abs() + direction.1.abs() == 1;
-}
+impl Display for Board {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("  ")?;
 
-fn is_diagonal(direction: (isize, isize)) -> bool {
-    return direction.0.abs() + direction.1.abs() == 2;
+        for c in 'A'..='H' {
+            write!(f, " {}", c)?;
+        }
+
+        f.write_str("\n\n")?;
+
+        for i in (0..=7).rev() {
+            let window = self.all().0 >> ((i * 8) as u8).swap_bytes();
+
+            write!(f, "{} ", i + 1)?;
+
+            for w in 0..8 {
+                if window & (1 << w) == (1 << w) {
+                    let coord = Coord::from_xy(w, i);
+
+                    if let Some(white_piece) = self.white.lookup(coord) {
+                        let c = match white_piece {
+                            PieceType::Pawn => "P",
+                            PieceType::Rook => "R",
+                            PieceType::Knight => "N",
+                            PieceType::Bishop => "B",
+                            PieceType::Queen => "Q",
+                            PieceType::King => "K",
+                        };
+
+                        write!(f, " {}", c)?;
+                    }
+
+                    if let Some(black_piece) = self.black.lookup(coord) {
+                        let c = match black_piece {
+                            PieceType::Pawn => "p",
+                            PieceType::Rook => "r",
+                            PieceType::Knight => "n",
+                            PieceType::Bishop => "b",
+                            PieceType::Queen => "q",
+                            PieceType::King => "k",
+                        };
+
+                        write!(f, " {}", c)?;
+                    }
+                } else {
+                    f.write_str(" .")?
+                }
+            }
+
+            f.write_str("\n")?;
+        }
+
+        return Ok(());
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::time::{SystemTime, Instant};
+
+    use std::time::Instant;
 
     use super::{Board, Color};
-    use anyhow::{Ok, Result};
 
     #[test]
-    fn move_count_depth_1() -> Result<()> {
+    fn move_count_depth_1() {
         test_move_count_depth(1, 20)
     }
 
     #[test]
-    fn move_count_depth_2() -> Result<()> {
+    fn move_count_depth_2() {
         test_move_count_depth(2, 400)
     }
 
     #[test]
-    fn move_count_depth_3() -> Result<()> {
+    fn move_count_depth_3() {
         test_move_count_depth(3, 8902)
     }
 
     #[test]
-    fn move_count_depth_4() -> Result<()> {
+    fn move_count_depth_4() {
         test_move_count_depth(4, 197281)
     }
 
     #[test]
-    fn move_count_depth_5() -> Result<()> {
+    fn move_count_depth_5() {
         test_move_count_depth(5, 4865609)
     }
 
     #[test]
-    fn move_count_depth_6() -> Result<()> {
+    fn move_count_depth_6() {
         test_move_count_depth(6, 119060324)
     }
 
-    fn test_move_count(depth: usize, board: &mut Board, turn: Color) -> Result<u128> {
+    fn test_move_count(depth: usize, board: &mut Board, turn: Color) -> u128 {
         if depth == 0 {
-            return Ok(1);
+            return 1;
         }
 
         let moves = super::moves::get_moves(&board);
         let mut count: u128 = 0;
 
         for mv in moves {
-            board.exec_move(mv)?;
-            count += test_move_count(depth - 1, board, turn.invert())?;
-            board.undo_move()?;
+            println!("{depth}: {mv}");
+
+            println!("before:");
+            println!("{board}");
+
+            board.exec_move(mv).unwrap();
+
+            println!("after:");
+            println!("{board}");
+
+            count += test_move_count(depth - 1, board, turn.invert());
+            board.undo_move().unwrap();
+
+            println!("undo:");
+            println!("{board}");
         }
 
-        return Ok(count);
+        return count;
     }
 
-    fn test_move_count_depth(depth: usize, expected_move_count: u128) -> Result<()> {
+    fn test_move_count_depth(depth: usize, expected_move_count: u128) {
         eprintln!("testing depth {depth}");
 
         let mut board = Board::new_game();
 
         let start = Instant::now();
-        let count = test_move_count(depth, &mut board, Color::White)?;
+        let count = test_move_count(depth, &mut board, Color::White);
 
         let duration = start.elapsed();
 
         eprintln!("expected {expected_move_count}, got {count} moves (took {} ms)", duration.as_millis());
         assert_eq!(expected_move_count, count);
-
-        return Ok(());
     }
 }
