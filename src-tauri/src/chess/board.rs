@@ -2,7 +2,7 @@ use crate::fen::{self, FenError};
 
 use super::bitboard::BitBoard;
 use super::coord::Coord;
-use super::moves::Move;
+use super::moves::{self, Move};
 use super::piece::{Color, Piece, PieceType};
 
 use anyhow::Result;
@@ -40,7 +40,8 @@ pub struct BoardSide {
 
     attacked_squares: BitBoard,
 
-    checked: bool,
+    check_targets: BitBoard,
+    pin_rays: BitBoard,
 
     can_castle_left: bool,
     can_castle_right: bool,
@@ -61,7 +62,8 @@ impl BoardSide {
 
             attacked_squares: Default::default(),
 
-            checked: false,
+            check_targets: Default::default(),
+            pin_rays: Default::default(),
 
             can_castle_left: true,
             can_castle_right: true,
@@ -92,12 +94,24 @@ impl BoardSide {
         return &self.queens;
     }
 
-    pub fn king(&self) -> Coord {
+    pub fn king(&self) -> &BitBoard {
+        return &self.king;
+    }
+
+    pub fn king_coord(&self) -> Coord {
         return self.king.into_iter().next().unwrap();
     }
 
     pub fn checked(&self) -> bool {
-        return self.checked;
+        return self.check_targets != 0.into();
+    }
+
+    pub fn check_targets(&self) -> &BitBoard {
+        return &self.check_targets;
+    }
+
+    pub fn pin_rays(&self) -> &BitBoard {
+        return &self.pin_rays;
     }
 
     pub fn can_castle_left(&self) -> bool {
@@ -112,8 +126,12 @@ impl BoardSide {
         return &self.attacked_squares;
     }
 
-    pub fn set_attacked_squares(&mut self, attacked_squares: BitBoard) {
-        self.attacked_squares = attacked_squares;
+    pub fn lookup(&self, coord: Coord) -> Option<PieceType> {
+        if self.all.is_set(coord) {
+            return Some(self.lookup[coord.offset()]);
+        }
+
+        return None;
     }
 
     fn get_bitboard(&mut self, piece_type: PieceType) -> &mut BitBoard {
@@ -138,7 +156,7 @@ impl BoardSide {
         self.all.unset(coord);
     }
 
-    fn capture(&mut self, coord: Coord) -> Result<(), MoveErr> {
+    fn capture(&mut self, coord: Coord) -> Result<PieceType, MoveErr> {
         let piece_type = self.lookup[coord.offset()];
 
         if piece_type == PieceType::King {
@@ -148,7 +166,7 @@ impl BoardSide {
         self.get_bitboard(piece_type).unset(coord);
         self.all.unset(coord);
 
-        return Ok(());
+        return Ok(piece_type);
     }
 
     fn mv(&mut self, from: Coord, to: Coord) -> PieceType {
@@ -180,6 +198,9 @@ pub struct Board {
     checkmate: Option<Color>,
 
     en_passant_square: Option<Coord>,
+
+    last_captured_piece: Option<PieceType>,
+    last_move: Option<Move>,
 }
 
 impl Board {
@@ -193,6 +214,9 @@ impl Board {
             black: BoardSide::new(),
 
             en_passant_square: None,
+
+            last_captured_piece: None,
+            last_move: None,
         }
     }
 
@@ -223,11 +247,14 @@ impl Board {
             self.set(item);
         }
 
-        let _ = super::moves::get_moves(self);
+        self.turning_side_mut().attacked_squares = moves::get_attacked_squares(self);
         self.turn = self.turn.invert();
 
-        let _ = super::moves::get_moves(self);
+        self.turning_side_mut().attacked_squares = moves::get_attacked_squares(self);
         self.turn = self.turn.invert();
+
+        self.set_pin_rays(Color::White);
+        self.set_pin_rays(Color::Black);
 
         return Ok(());
     }
@@ -271,15 +298,27 @@ impl Board {
     }
 
     pub fn white_checked(&self) -> bool {
-        return self.white.checked;
+        return self.white.checked();
     }
 
     pub fn black_checked(&self) -> bool {
-        return self.black.checked;
+        return self.black.checked();
     }
 
     pub fn en_passant_square(&self) -> Option<Coord> {
         return self.en_passant_square;
+    }
+
+    pub fn lookup(&self, coord: Coord) -> Option<PieceType> {
+        if let Some(p) = self.white.lookup(coord) {
+            return Some(p);
+        }
+
+        if let Some(p) = self.black.lookup(coord) {
+            return Some(p);
+        }
+
+        return None;
     }
 
     pub fn turning_side(&self) -> &BoardSide {
@@ -317,7 +356,7 @@ impl Board {
         self.side_mut(piece.color).set(piece.coord, piece.piece_type);
     }
 
-    pub fn exec_move(&mut self, mv: &Move) -> Result<(), MoveErr> {
+    pub fn exec_move(&mut self, mv: Move) -> Result<(), MoveErr> {
         if !self.all.is_set(mv.from) {
             return Err(MoveErr::NoPieceAt(mv.from));
         }
@@ -329,7 +368,9 @@ impl Board {
         }
 
         if opponent.all.is_set(mv.to) {
-            opponent.capture(mv.to)?;
+            self.last_captured_piece = Some(opponent.capture(mv.to)?);
+        } else {
+            self.last_captured_piece = None;
         }
 
         let side = self.turning_side_mut();
@@ -338,15 +379,77 @@ impl Board {
             return Err(MoveErr::CannotCaptureOwnPiece);
         }
 
-        let piece_type = self.mv(mv);
+        if side.checked() {
+            side.check_targets = BitBoard::new(0);
+        }
 
-        self.exec_castling(mv);
-        self.set_castling_rights(mv);
+        let piece_type = self.mv(&mv);
 
-        self.exec_en_passant(mv);
-        self.set_enpassant_square(piece_type, mv);
+        self.exec_castling(&mv);
+        self.set_castling_rights(&mv);
+
+        self.exec_en_passant(&mv);
+        self.set_enpassant_square(piece_type, &mv);
+
+
+        self.set_pin_rays(Color::White);
+        self.set_pin_rays(Color::Black);
+
+        self.turning_side_mut().attacked_squares = moves::get_attacked_squares(self);
+        self.set_check();
 
         self.turn = self.turn.invert();
+
+        self.last_move = Some(mv);
+
+        return Ok(());
+    }
+
+    pub fn undo_move(&mut self) -> Result<(), MoveErr> {
+        if let Some(mv) = self.last_move {
+            let reverse_move = Move::new(mv.to, mv.from);
+
+            self.turn = self.turn.invert();
+
+            self.mv(&reverse_move);
+
+            if let Some(captured) = self.last_captured_piece {
+                self.all.set(mv.to);
+                self.opponent_side_mut().set(mv.to, captured);
+            }
+
+            if mv.castling {
+                let is_right = mv.to.column() == 'g';
+                let from_rook_coord = Coord::new(if is_right { 'f' } else { 'd' }, mv.to.row());
+                let to_rook_coord = Coord::new(if is_right { 'h' } else { 'a' }, mv.to.row());
+
+                self.mv(&Move::new(from_rook_coord, to_rook_coord));
+                self.turning_side_mut().can_castle_right = true;
+                self.turning_side_mut().can_castle_left = true;
+            }
+
+            if mv.en_passant {
+                let victim_coord = match self.turn() {
+                    Color::White => mv.to.mv(0, -1),
+                    Color::Black => mv.to.mv(0, 1),
+                }.expect("victim coord to be valid");
+
+                self.all.set(victim_coord);
+                self.opponent_side_mut().set(victim_coord, PieceType::Pawn);
+                self.en_passant_square = Some(mv.to);
+            }
+            else {
+                self.en_passant_square = None;
+            }
+
+            self.set_pin_rays(Color::White);
+            self.set_pin_rays(Color::Black);
+
+            self.turning_side_mut().attacked_squares = moves::get_attacked_squares(self);
+            self.set_check();
+
+            self.last_move = None;
+        }
 
         return Ok(());
     }
@@ -418,6 +521,116 @@ impl Board {
         }
     }
 
+    fn set_check(&mut self) {
+        let opponent_side = self.opponent_side();
+        let turning_side = self.turning_side();
+
+        let is_checked = turning_side.attacked_squares() & opponent_side.king() != 0.into();
+
+        if !is_checked {
+            self.opponent_side_mut().check_targets = 0.into();
+            return;
+        }
+
+        let mut check_targets = BitBoard::new(0);
+
+        for direction in moves::KING_MOVES {
+            let mut ray = BitBoard::new(0);
+            let mut coord = opponent_side.king_coord().clone();
+
+            let is_orthogonal = is_orthogonal(direction);
+            let is_diagonal = is_diagonal(direction);
+
+            while coord.mv_mut(direction.0, direction.1) {
+                if opponent_side.all().is_set(coord) {
+                    break;
+                }
+
+                ray.set(coord);
+
+                if turning_side.queens().is_set(coord) {
+                    check_targets |= ray;
+                    break;
+                }
+
+                if is_orthogonal && turning_side.rooks().is_set(coord) {
+                    check_targets |= ray;
+                    break;
+                }
+
+                if is_diagonal && turning_side.bishops().is_set(coord) {
+                    check_targets |= ray;
+                    break;
+                }
+
+                if turning_side.all().is_set(coord) {
+                    break;
+                }
+            }
+        }
+
+        for knight in turning_side.knights() {
+            check_targets |= moves::get_move_mask_from(knight, self) & opponent_side.king();
+        }
+
+        for pawn in turning_side.pawns() {
+            check_targets |= moves::get_pawn_attacks(pawn, self) & opponent_side.king();
+        }
+
+        check_targets |= moves::get_move_mask_from(turning_side.king_coord(), self) & opponent_side.king();
+
+        self.opponent_side_mut().check_targets = check_targets;
+    }
+
+    fn set_pin_rays(&mut self, color: Color) {
+        let king = self.side(color).king_coord();
+        let opponent_side = self.side(color.invert());
+        let mut pin_rays = BitBoard::new(0);
+
+        for direction in moves::KING_MOVES {
+            let mut ray = BitBoard::new(0);
+            let mut friendly_piece_count = 0;
+            let mut coord = king.clone();
+
+            let is_diagonal = is_diagonal(direction);
+            let is_orthogonal = is_orthogonal(direction);
+
+            while coord.mv_mut(direction.0, direction.1) {
+                if self.side(color).all().is_set(coord) {
+                    friendly_piece_count += 1;
+                }
+
+                if friendly_piece_count > 1 {
+                    break;
+                }
+
+                if opponent_side.queens().is_set(coord) {
+                    pin_rays |= ray;
+                    break;
+                }
+
+                if is_orthogonal && opponent_side.rooks().is_set(coord) {
+                    pin_rays |= ray;
+                    break;
+                }
+
+                if is_diagonal && opponent_side.bishops().is_set(coord) {
+                    pin_rays |= ray;
+                    break;
+                }
+
+
+                if opponent_side.all().is_set(coord) {
+                    break;
+                }
+
+                ray.set(coord);
+            }
+        }
+
+        self.side_mut(color).pin_rays = pin_rays;
+    }
+
     fn mv(&mut self, mv: &Move) -> PieceType {
         self.all.unset(mv.from);
         self.all.set(mv.to);
@@ -426,9 +639,17 @@ impl Board {
     }
 }
 
+fn is_orthogonal(direction: (isize, isize)) -> bool {
+    return direction.0.abs() + direction.1.abs() == 1;
+}
+
+fn is_diagonal(direction: (isize, isize)) -> bool {
+    return direction.0.abs() + direction.1.abs() == 2;
+}
+
 #[cfg(test)]
 mod tests {
-    use std::time::SystemTime;
+    use std::time::{SystemTime, Instant};
 
     use super::{Board, Color};
     use anyhow::{Ok, Result};
@@ -463,34 +684,32 @@ mod tests {
         test_move_count_depth(6, 119060324)
     }
 
-    fn test_move_count(depth: usize, board: Board, turn: Color) -> Result<u128> {
-        // if depth == 0 {
-        //     return Ok(1);
-        // }
-        //
-        // let moves = board.get_all_available_moves(turn)?;
-        // let mut count: u128 = 0;
-        //
-        // for mv in moves {
-        //     // let mut next_board = board.clone();
-        //
-        //     // next_board.exec_move(&mv)?;
-        //     // count += test_move_count(depth - 1, next_board, turn.invert())?;
-        // }
-        //
-        // return Ok(count);
-        Ok(0)
+    fn test_move_count(depth: usize, board: &mut Board, turn: Color) -> Result<u128> {
+        if depth == 0 {
+            return Ok(1);
+        }
+
+        let moves = super::moves::get_moves(&board);
+        let mut count: u128 = 0;
+
+        for mv in moves {
+            board.exec_move(mv)?;
+            count += test_move_count(depth - 1, board, turn.invert())?;
+            board.undo_move()?;
+        }
+
+        return Ok(count);
     }
 
     fn test_move_count_depth(depth: usize, expected_move_count: u128) -> Result<()> {
         eprintln!("testing depth {depth}");
 
-        let start = SystemTime::now();
+        let mut board = Board::new_game();
 
-        let count = test_move_count(depth, Board::new_game(), Color::White)?;
+        let start = Instant::now();
+        let count = test_move_count(depth, &mut board, Color::White)?;
 
-        let end = SystemTime::now();
-        let duration = end.duration_since(start).unwrap();
+        let duration = start.elapsed();
 
         eprintln!("expected {expected_move_count}, got {count} moves (took {} ms)", duration.as_millis());
         assert_eq!(expected_move_count, count);

@@ -61,8 +61,8 @@ struct BoardState {
 
 fn mutate_board<T, E>(app: AppHandle, state: State<BoardState>, mutation: T) -> Result<()>
 where
-    T: Fn(&mut Board) -> Result<(), E>,
-    E: Error + Send + Sync + 'static
+    T: FnOnce(&mut Board) -> Result<(), E>,
+    E: Error + Send + Sync + 'static,
 {
     let mut board = get_board(state);
 
@@ -83,8 +83,8 @@ fn get_board_cmd(state: State<BoardState>) -> BoardPayload {
 
 #[tauri::command]
 fn get_available_moves(coord: Coord, state: State<BoardState>) -> CommandResult<Vec<Move>> {
-    let mut board = get_board(state);
-    let all_moves = chess::moves::get_moves(&mut *board);
+    let board = get_board(state);
+    let all_moves = chess::moves::get_moves(&*board);
     let moves_from = all_moves.into_iter().filter(|mv| mv.from == coord).collect::<Vec<Move>>();
 
     return Ok(moves_from);
@@ -92,7 +92,13 @@ fn get_available_moves(coord: Coord, state: State<BoardState>) -> CommandResult<
 
 #[tauri::command]
 fn exec_move(mv: Move, app: AppHandle, state: State<BoardState>) -> CommandResult {
-    mutate_board(app, state, |board| board.exec_move(&mv))?;
+    mutate_board(app, state, |board| board.exec_move(mv))?;
+    return Ok(());
+}
+
+#[tauri::command]
+fn undo(app: AppHandle, state: State<BoardState>) -> CommandResult {
+    mutate_board(app, state, |board| board.undo_move())?;
     return Ok(());
 }
 
@@ -108,7 +114,7 @@ fn main() {
 
     tauri::Builder::default()
         .manage(state)
-        .invoke_handler(tauri::generate_handler![get_board_cmd, get_available_moves, exec_move, apply_fen])
+        .invoke_handler(tauri::generate_handler![get_board_cmd, get_available_moves, exec_move, undo, apply_fen])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

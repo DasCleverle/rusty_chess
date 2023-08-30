@@ -23,3 +23,7 @@ export async function executeMove(move: Move) {
 export async function applyFen(fen: string) {
     return await invoke<Move[]>('apply_fen', { fen });
 }
+
+export async function undo() {
+    return await invoke('undo');
+}

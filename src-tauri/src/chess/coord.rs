@@ -39,6 +39,10 @@ impl Coord {
         Self { offset: (row * 8 + column) as isize }
     }
 
+    pub fn from_xy(x: u8, y: u8) -> Self {
+        Self { offset: (y * 8 + x) as isize }
+    }
+
     pub fn from_str(str: &str) -> Option<Self> {
         if str.len() != 2 {
             None
@@ -73,6 +77,11 @@ impl Coord {
 
     pub fn row(&self) -> u8 {
         let row = self.offset / 8 + 1;
+        return row as u8;
+    }
+
+    pub fn row_index(&self) -> u8 {
+        let row = self.offset / 8;
         return row as u8;
     }
 
