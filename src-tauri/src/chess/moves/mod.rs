@@ -117,6 +117,16 @@ pub fn get_attacked_squares(board: &Board) -> BitBoard {
     return attacked_squares;
 }
 
+pub fn get_move_mask(board: &Board) -> BitBoard {
+    let mut moves = BitBoard::new(0);
+
+    for piece in board.turning_side().all() {
+        moves |= get_move_mask_from(piece, board);
+    }
+
+    return moves;
+}
+
 pub fn get_move_mask_from(from: Coord, board: &Board) -> BitBoard {
     let moves = match board.lookup(from) {
         Some(super::PieceType::Rook) => get_rook_moves(from, board, board.all()),

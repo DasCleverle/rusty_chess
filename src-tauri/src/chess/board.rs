@@ -195,7 +195,7 @@ pub struct Board {
     white: BoardSide,
     black: BoardSide,
 
-    checkmate: Option<Color>,
+    winner: Option<Color>,
 
     en_passant_square: Option<Coord>,
 
@@ -207,7 +207,7 @@ impl Board {
     pub fn empty() -> Board {
         Board {
             turn: Color::White,
-            checkmate: None,
+            winner: None,
 
             all: BitBoard::new(0),
             white: BoardSide::new(),
@@ -233,13 +233,16 @@ impl Board {
 
     pub fn apply_fen(&mut self, fen_str: &str) -> Result<(), FenError> {
         self.turn = Color::White;
-        self.checkmate = None;
+        self.winner = None;
 
         self.all = BitBoard::new(0);
         self.white = BoardSide::new();
         self.black = BoardSide::new();
 
         self.en_passant_square = None;
+
+        self.last_captured_piece = None;
+        self.last_move = None;
 
         let pieces = fen::parse_fen(fen_str)?;
 
@@ -248,9 +251,11 @@ impl Board {
         }
 
         self.turning_side_mut().attacked_squares = moves::get_attacked_squares(self);
+        self.set_check();
         self.turn = self.turn.invert();
 
         self.turning_side_mut().attacked_squares = moves::get_attacked_squares(self);
+        self.set_check();
         self.turn = self.turn.invert();
 
         self.set_pin_rays(Color::White);
@@ -303,6 +308,10 @@ impl Board {
 
     pub fn black_checked(&self) -> bool {
         return self.black.checked();
+    }
+
+    pub fn winner(&self) -> Option<Color> {
+        return self.winner;
     }
 
     pub fn en_passant_square(&self) -> Option<Coord> {
@@ -400,6 +409,8 @@ impl Board {
 
         self.turn = self.turn.invert();
 
+        self.set_checkmate();
+
         self.last_move = Some(mv);
 
         return Ok(());
@@ -409,6 +420,7 @@ impl Board {
         if let Some(mv) = self.last_move {
             let reverse_move = Move::new(mv.to, mv.from);
 
+            self.winner = None;
             self.turn = self.turn.invert();
 
             self.mv(&reverse_move);
@@ -580,6 +592,22 @@ impl Board {
         check_targets |= moves::get_move_mask_from(turning_side.king_coord(), self) & opponent_side.king();
 
         self.opponent_side_mut().check_targets = check_targets;
+    }
+
+    fn set_checkmate(&mut self) {
+        if !self.turning_side().checked() {
+            self.winner = None;
+            return;
+        }
+
+        let moves = moves::get_move_mask(self);
+
+        if moves != 0.into() {
+            self.winner = None;
+            return;
+        }
+
+        self.winner = Some(self.turn().invert());
     }
 
     fn set_pin_rays(&mut self, color: Color) {

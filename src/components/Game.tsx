@@ -3,6 +3,7 @@ import { Color, Coord, Move, Piece, toCoordFromXY } from "../chess";
 import { BoardPayload, executeMove, getAvailableMoves, getBoard } from "../commands";
 import { Square } from "./Square";
 import { listen } from "@tauri-apps/api/event";
+import swal from 'sweetalert2';
 
 interface Row {
     row: number,
@@ -45,6 +46,7 @@ export function Game() {
     const [turn, setTurn] = useState<Color>('White');
     const [whiteChecked, setWhiteChecked] = useState<boolean>(false);
     const [blackChecked, setBlackChecked] = useState<boolean>(false);
+    const [winner, setWinner] = useState<string | undefined>();
 
     useEffect(() => {
         function setState(payload: BoardPayload) {
@@ -52,6 +54,7 @@ export function Game() {
             setTurn(payload.turn);
             setWhiteChecked(payload.whiteChecked);
             setBlackChecked(payload.blackChecked);
+            setWinner(payload.winner);
         }
 
         async function init() {
@@ -64,6 +67,14 @@ export function Game() {
 
         init();
     }, []);
+
+    useEffect(() => {
+        if (!winner) {
+            return;
+        }
+
+        swal.fire(`${winner} has won!`);
+    }, [winner]);
 
     const handleSquareClick = async (piece: Piece) => {
         if (selected) {

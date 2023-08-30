@@ -6,6 +6,7 @@ export interface BoardPayload {
     pieces: Piece[];
     whiteChecked: boolean;
     blackChecked: boolean;
+    winner?: string;
 }
 
 export async function getBoard(): Promise<BoardPayload> {

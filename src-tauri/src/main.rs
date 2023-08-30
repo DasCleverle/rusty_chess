@@ -42,6 +42,7 @@ struct BoardPayload {
     turn: Color,
     white_checked: bool,
     black_checked: bool,
+    winner: Option<Color>,
 }
 
 impl BoardPayload {
@@ -51,6 +52,7 @@ impl BoardPayload {
             turn: board.turn(),
             white_checked: board.white_checked(),
             black_checked: board.black_checked(),
+            winner: board.winner()
         };
     }
 }
