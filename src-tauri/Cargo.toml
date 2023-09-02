@@ -26,7 +26,3 @@ lazy_static = "1.4.0"
 # this feature is used for production builds or when `devPath` points to the filesystem
 # DO NOT REMOVE!!
 custom-protocol = ["tauri/custom-protocol"]
-
-[profile.test]
-opt-level = 3
-debug = "line-tables-only"
