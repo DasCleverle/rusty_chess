@@ -1,12 +1,6 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-#[macro_use]
-extern crate lazy_static;
-
-mod chess;
-mod fen;
-
 use anyhow::Result;
 
 use std::{
@@ -86,7 +80,7 @@ fn get_board_cmd(state: State<BoardState>) -> BoardPayload {
 #[tauri::command]
 fn get_available_moves(coord: Coord, state: State<BoardState>) -> CommandResult<Vec<Move>> {
     let board = get_board(state);
-    let all_moves = chess::moves::get_moves(&*board);
+    let all_moves = chess::get_moves(&*board);
     let moves_from = all_moves.into_iter().filter(|mv| mv.from == coord).collect::<Vec<Move>>();
 
     return Ok(moves_from);

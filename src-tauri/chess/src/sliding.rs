@@ -1,4 +1,4 @@
-use crate::chess::{Coord, bitboard::BitBoard};
+use crate::{Coord, bitboard::BitBoard};
 
 pub fn get_rook_move_mask(from: Coord, blockers: &BitBoard, friendly_pieces: &BitBoard) -> BitBoard {
     get_blocked_move_mask(from, blockers, friendly_pieces, &ROOK_MOVES, &ROOK_DIRECTIONS)

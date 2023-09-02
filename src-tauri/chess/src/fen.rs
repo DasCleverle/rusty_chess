@@ -1,5 +1,6 @@
-use crate::chess::{Color, Coord, Piece, PieceType};
 use anyhow::Result;
+
+use crate::{Piece, Color, PieceType, Coord};
 
 #[derive(Debug, thiserror::Error)]
 pub enum FenError {

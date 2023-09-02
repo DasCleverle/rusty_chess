@@ -1,13 +1,8 @@
 use std::fmt::Display;
 
-use crate::fen::{self, FenError};
-
-use super::bitboard::BitBoard;
-use super::coord::Coord;
-use super::moves::{self, Move};
-use super::piece::{Color, Piece, PieceType};
-
 use anyhow::Result;
+
+use crate::{Coord, bitboard::BitBoard, PieceType, Move, Color, fen::{FenError, self}, moves, Piece};
 
 const A1: Coord = Coord { offset: 0 };
 const H1: Coord = Coord { offset: 7 };
@@ -743,8 +738,7 @@ impl Display for Board {
 mod tests {
 
     use std::time::Instant;
-    use crate::chess::{Coord, Move};
-    use super::Board;
+    use super::*;
 
     #[test]
     fn move_count_depth_1() {

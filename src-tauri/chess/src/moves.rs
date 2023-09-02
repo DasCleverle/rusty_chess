@@ -1,10 +1,8 @@
-mod sliding;
-
 use std::fmt::Display;
 
 use serde::{Deserialize, Serialize};
 
-use super::{bitboard::BitBoard, Board, Color, Coord};
+use crate::{sliding, bitboard::BitBoard, Board, Color, Coord};
 
 const KNIGHT_JUMPS: [(isize, isize); 8] = [(-2, 1), (-1, 2), (1, 2), (2, 1), (2, -1), (1, -2), (-1, -2), (-2, -1)];
 pub const KING_MOVES: [(isize, isize); 8] = [(-1, 0), (-1, 1), (0, 1), (1, 1), (1, 0), (1, -1), (0, -1), (-1, -1)];
