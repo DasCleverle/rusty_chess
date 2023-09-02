@@ -200,7 +200,7 @@ fn is_diagonal(direction: (isize, isize)) -> bool {
 
 struct LastMove {
     mv: Move,
-    captured_piece: Option<PieceType>
+    captured_piece: Option<PieceType>,
 }
 
 pub struct Board {
@@ -214,7 +214,7 @@ pub struct Board {
 
     en_passant_square: Option<Coord>,
 
-    last_moves: Vec<LastMove>
+    last_moves: Vec<LastMove>,
 }
 
 impl Board {
@@ -378,10 +378,7 @@ impl Board {
     }
 
     pub fn exec_move(&mut self, mv: Move) -> Result<(), MoveErr> {
-        let mut last_move = LastMove {
-            mv,
-            captured_piece: None
-        };
+        let mut last_move = LastMove { mv, captured_piece: None };
 
         if !self.all.is_set(mv.from) {
             return Err(MoveErr::NoPieceAt(mv.from));
@@ -593,15 +590,23 @@ impl Board {
             }
         }
 
+        let king = *opponent_side.king();
+
         for knight in turning_side.knights() {
-            check_targets |= moves::get_move_mask_from(knight, self) & opponent_side.king();
+            if moves::get_move_mask_from(knight, self) & king == king {
+                check_targets.set(knight);
+            }
         }
 
         for pawn in turning_side.pawns() {
-            check_targets |= moves::get_pawn_attacks(pawn, self) & opponent_side.king();
+            if moves::get_pawn_attacks(pawn, self) & king == king {
+                check_targets.set(pawn);
+            }
         }
 
-        check_targets |= moves::get_move_mask_from(turning_side.king_coord(), self) & opponent_side.king();
+        if moves::get_move_mask_from(turning_side.king_coord(), self) & king == king {
+            check_targets |= *turning_side.king();
+        }
 
         self.opponent_side_mut().check_targets = check_targets;
     }
@@ -644,6 +649,8 @@ impl Board {
                     break;
                 }
 
+                ray.set(coord);
+
                 if opponent_side.queens().is_set(coord) {
                     pin_rays |= ray;
                     break;
@@ -662,8 +669,6 @@ impl Board {
                 if opponent_side.all().is_set(coord) {
                     break;
                 }
-
-                ray.set(coord);
             }
         }
 
@@ -738,8 +743,8 @@ impl Display for Board {
 mod tests {
 
     use std::time::Instant;
-
-    use super::{Board, Color};
+    use crate::chess::{Coord, Move};
+    use super::Board;
 
     #[test]
     fn move_count_depth_1() {
@@ -771,7 +776,84 @@ mod tests {
         test_move_count_depth(6, 119060324)
     }
 
-    fn test_move_count(depth: usize, board: &mut Board, turn: Color) -> u128 {
+    #[test]
+    fn b2b4_depth_4() {
+        test_move_count_preset(vec![("b2", "b4")], 4, 216145);
+    }
+
+    #[test]
+    fn b2b4_c7c5_depth_3() {
+        test_move_count_preset(vec![("b2", "b4"), ("c7", "c5")], 3, 11980);
+    }
+
+    #[test]
+    fn b2b4_c7c5_d2d3_depth_2() {
+        test_move_count_preset(vec![("b2", "b4"), ("c7", "c5"), ("d2", "d3")], 2, 662);
+    }
+
+    #[test]
+    fn d2d3_depth_4() {
+        test_move_count_preset(vec![("d2", "d3")], 4, 328511);
+    }
+
+    #[test]
+    fn d2d3_g8f6_depth_3() {
+        test_move_count_preset(vec![("d2", "d3"), ("g8", "f6")], 3, 16343);
+    }
+
+    #[test]
+    fn d2d3_g8f6_e1d2_depth_2() {
+        test_move_count_preset(vec![("d2", "d3"), ("g8", "f6"), ("e1", "d2")], 2, 482);
+    }
+
+    #[test]
+    fn f2f3_depth_4() {
+        test_move_count_preset(vec![("f2", "f3")], 4, 178889);
+    }
+
+    #[test]
+    fn f2f3_e7e5_depth_3() {
+        test_move_count_preset(vec![("f2", "f3"), ("e7", "e5")], 3, 11679);
+    }
+
+    #[test]
+    fn f2f3_e7e5_e1f2_depth_2() {
+        test_move_count_preset(vec![("f2", "f3"), ("e7", "e5"), ("e1", "f2")], 2, 618);
+    }
+
+    #[test]
+    fn d2d4_depth_5() {
+        test_move_count_preset(vec![("d2", "d4")], 5, 8879566);
+    }
+
+    #[test]
+    fn d2d4_e7e5_depth_4() {
+        test_move_count_preset(vec![("d2", "d4"), ("e7", "e5")], 4, 809643);
+    }
+
+    #[test]
+    fn d2d4_e7e5_d4d5_depth_3() {
+        test_move_count_preset(vec![("d2", "d4"), ("e7", "e5"), ("d4", "d5")], 3, 23878);
+    }
+
+    #[test]
+    fn d2d4_e7e5_d4d5_e8e7_depth_2() {
+        test_move_count_preset(vec![("d2", "d4"), ("e7", "e5"), ("d4", "d5"), ("e8", "e7")], 2, 603);
+    }
+
+    fn test_move_count_preset(moves: Vec<(&str, &str)>, depth: usize, expected_move_count: u128) {
+        let mut board = Board::new_game();
+
+        for (from, to) in moves {
+            let mv = Move::new(Coord::from_str(from).unwrap(), Coord::from_str(to).unwrap());
+            board.exec_move(mv).unwrap();
+        }
+
+        let count = test_move_count(depth, &mut board, true);
+        assert_eq!(expected_move_count, count, "expected {expected_move_count}, got {count} moves");
+    }
+
+    fn test_move_count(depth: usize, board: &mut Board, log: bool) -> u128 {
         if depth == 0 {
             return 1;
         }
@@ -780,21 +862,15 @@ mod tests {
         let mut count: u128 = 0;
 
         for mv in moves {
-            println!("{depth}: {mv}");
-
-            println!("before:");
-            println!("{board}");
-
             board.exec_move(mv).unwrap();
+            let depth_count = test_move_count(depth - 1, board, false);
 
-            println!("after:");
-            println!("{board}");
+            if log {
+                println!("{mv}: {depth_count}");
+            }
 
-            count += test_move_count(depth - 1, board, turn.invert());
+            count += depth_count;
             board.undo_move().unwrap();
-
-            println!("undo:");
-            println!("{board}");
         }
 
         return count;
@@ -806,7 +882,7 @@ mod tests {
         let mut board = Board::new_game();
 
         let start = Instant::now();
-        let count = test_move_count(depth, &mut board, Color::White);
+        let count = test_move_count(depth, &mut board, true);
 
         let duration = start.elapsed();
 

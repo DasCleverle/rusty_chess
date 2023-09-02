@@ -26,26 +26,14 @@ pub fn get_moves(board: &Board) -> Vec<Move> {
     let mut moves: Vec<Move> = Vec::new();
 
     for rook in board.turning_side().rooks() {
-        if is_pinned(rook, board) {
-            continue;
-        }
-
         into_moves(&mut moves, rook, get_rook_moves(rook, board, board.all()));
     }
 
     for bishop in board.turning_side().bishops() {
-        if is_pinned(bishop, board) {
-            continue;
-        }
-
         into_moves(&mut moves, bishop, get_bishop_moves(bishop, board, board.all()));
     }
 
     for queen in board.turning_side().queens() {
-        if is_pinned(queen, board) {
-            continue;
-        }
-
         into_moves(&mut moves, queen, get_queen_moves(queen, board, board.all()));
     }
 
@@ -58,16 +46,12 @@ pub fn get_moves(board: &Board) -> Vec<Move> {
     }
 
     for pawn in board.turning_side().pawns() {
-        if is_pinned(pawn, board) {
-            continue;
-        }
-
         let pawn_moves = get_pawn_moves(pawn, board);
-        let pawn_attacks = get_pawn_attacks(pawn, board);
+        let pawn_attacks = get_pawn_attacks(pawn, board) & board.opponent_side().all();
         let en_passant_moves = get_en_passant_move(pawn, board);
 
         into_moves(&mut moves, pawn, pawn_moves);
-        into_moves(&mut moves, pawn, pawn_attacks & board.opponent_side().all());
+        into_moves(&mut moves, pawn, pawn_attacks);
 
         for en_passant_move in en_passant_moves {
             moves.push(Move::en_passant(pawn, en_passant_move));
@@ -90,17 +74,19 @@ pub fn get_moves(board: &Board) -> Vec<Move> {
 pub fn get_attacked_squares(board: &Board) -> BitBoard {
     let mut attacked_squares = BitBoard::new(0);
     let blockers = board.all() & !(board.opponent_side().king());
+    let friendly_pieces = BitBoard::new(0);
 
     for rook in board.turning_side().rooks() {
-        attacked_squares |= get_rook_moves(rook, board, &blockers);
+        attacked_squares |= sliding::get_rook_move_mask(rook, &blockers, &friendly_pieces);
     }
 
     for bishop in board.turning_side().bishops() {
-        attacked_squares |= get_bishop_moves(bishop, board, &blockers);
+        attacked_squares |= sliding::get_bishop_move_mask(bishop, &blockers, &friendly_pieces);
     }
 
     for queen in board.turning_side().queens() {
-        attacked_squares |= get_queen_moves(queen, board, &blockers);
+        attacked_squares |= sliding::get_rook_move_mask(queen, &blockers, &friendly_pieces);
+        attacked_squares |= sliding::get_bishop_move_mask(queen, &blockers, &friendly_pieces);
     }
 
     for knight in board.turning_side().knights() {
@@ -144,15 +130,15 @@ pub fn get_move_mask_from(from: Coord, board: &Board) -> BitBoard {
         None => BitBoard::new(0),
     };
 
-    return filter(moves, board);
+    return moves;
 }
 
 fn get_rook_moves(from: Coord, board: &Board, blockers: &BitBoard) -> BitBoard {
-    filter(sliding::get_rook_move_mask(from, &blockers, board.turning_side().all()), board)
+    filter(from, sliding::get_rook_move_mask(from, &blockers, board.turning_side().all()), board)
 }
 
 fn get_bishop_moves(from: Coord, board: &Board, blockers: &BitBoard) -> BitBoard {
-    filter(sliding::get_bishop_move_mask(from, &blockers, board.turning_side().all()), board)
+    filter(from, sliding::get_bishop_move_mask(from, &blockers, board.turning_side().all()), board)
 }
 
 fn get_queen_moves(from: Coord, board: &Board, blockers: &BitBoard) -> BitBoard {
@@ -167,19 +153,19 @@ fn get_pawn_moves(from: Coord, board: &Board) -> BitBoard {
 
     let mut pawn_moves = BitBoard::new(0);
 
-    if let Some(to) = from.mv(move_dir.0, move_dir.1) {
-        pawn_moves.set(to);
-    }
+    if let Some(to1) = from.mv(move_dir.0, move_dir.1) {
+        pawn_moves.set(to1);
 
-    if from.row() == start_row {
-        if let Some(to) = from.mv(move_dir.0, move_dir.1 * 2) {
-            pawn_moves.set(to);
+        if from.row() == start_row && !board.all().is_set(to1) {
+            if let Some(to2) = from.mv(move_dir.0, move_dir.1 * 2) {
+                pawn_moves.set(to2);
+            }
         }
     }
 
     pawn_moves &= !board.all();
 
-    return filter(pawn_moves, board);
+    return filter(from, pawn_moves, board);
 }
 
 pub fn get_pawn_attacks(from: Coord, board: &Board) -> BitBoard {
@@ -198,7 +184,7 @@ pub fn get_pawn_attacks(from: Coord, board: &Board) -> BitBoard {
         pawn_attacks.set(to);
     }
 
-    return filter(pawn_attacks, board);
+    return filter(from, pawn_attacks, board);
 }
 
 fn get_en_passant_move(from: Coord, board: &Board) -> BitBoard {
@@ -212,7 +198,7 @@ fn get_en_passant_move(from: Coord, board: &Board) -> BitBoard {
         }
     }
 
-    return filter(moves, board);
+    return filter(from, moves, board);
 }
 
 fn get_knight_moves(from: Coord, board: &Board) -> BitBoard {
@@ -226,7 +212,7 @@ fn get_knight_moves(from: Coord, board: &Board) -> BitBoard {
 
     knight_moves &= !board.turning_side().all();
 
-    return filter(knight_moves, board);
+    return filter(from, knight_moves, board);
 }
 
 fn get_king_moves(board: &Board) -> BitBoard {
@@ -280,32 +266,30 @@ fn get_castling_moves(board: &Board) -> BitBoard {
     let attacked = board.opponent_side().attacked_squares();
     let off_limits = board.all() | attacked;
 
-    if turning_side.can_castle_right()
-        && (turning_side.rooks() & right_rook_start) == right_rook_start
-        && (off_limits & right_mask) == 0.into()
-    {
+    if turning_side.can_castle_right() && (turning_side.rooks() & right_rook_start) == right_rook_start && (off_limits & right_mask) == 0.into() {
         if let Some(to) = from.mv(2, 0) {
             moves.set(to);
         }
     }
 
-    if turning_side.can_castle_left()
-        && (turning_side.rooks() & left_rook_start) == left_rook_start
-        && (off_limits & left_mask) == 0.into()
-    {
+    if turning_side.can_castle_left() && (turning_side.rooks() & left_rook_start) == left_rook_start && (off_limits & left_mask) == 0.into() {
         if let Some(to) = from.mv(-2, 0) {
             moves.set(to);
         }
     }
 
-    return filter(moves, board);
+    return filter(from, moves, board);
 }
 
-fn filter(moves: BitBoard, board: &Board) -> BitBoard {
+fn filter(from: Coord, moves: BitBoard, board: &Board) -> BitBoard {
     let mut moves = moves;
 
     if board.turning_side().checked() {
         moves &= *board.turning_side().check_targets();
+    }
+
+    if is_pinned(from, board) {
+        moves &= *board.turning_side().pin_rays();
     }
 
     return moves;
@@ -360,6 +344,6 @@ impl Move {
 
 impl Display for Move {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} -> {}", self.from, self.to)
+        write!(f, "{}{}", self.from, self.to)
     }
 }
