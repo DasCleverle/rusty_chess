@@ -38,31 +38,30 @@ impl BitBoard {
 }
 
 pub struct BitBoardIter {
-    board: BitBoard,
-    count: u32,
-    found: u32,
-    index: usize,
+    value: u64,
+    offset: usize,
 }
 
 impl Iterator for BitBoardIter {
     type Item = Coord;
 
     fn next(&mut self) -> Option<Self::Item> {
-        while self.index < 64 && self.found < self.count {
-            let is_set = (self.board.0 >> self.index & 1) == 1;
-
-            if is_set {
-                let index = self.index;
-                self.index += 1;
-                self.found += 1;
-
-                return Some(Coord::from_offset(index));
-            }
-
-            self.index += 1;
+        if self.offset == 64 {
+            return None;
         }
 
-        return None;
+        let trailing_zeroes = self.value.trailing_zeros() as usize;
+
+        if trailing_zeroes == 64 {
+            return None;
+        }
+
+        let coord = Coord::from_offset(self.offset + trailing_zeroes);
+
+        self.value = self.value >> trailing_zeroes + 1;
+        self.offset += trailing_zeroes + 1;
+
+        return Some(coord);
     }
 }
 
@@ -72,10 +71,8 @@ impl IntoIterator for BitBoard {
 
     fn into_iter(self) -> Self::IntoIter {
         BitBoardIter {
-            board: self,
-            count: self.0.count_ones(),
-            found: 0,
-            index: 0,
+            value: self.0,
+            offset: 0,
         }
     }
 }
