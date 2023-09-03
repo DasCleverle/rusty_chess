@@ -140,7 +140,7 @@ impl Coord {
     pub fn distance(&self, other: Coord) -> (i8, i8) {
         return (
             other.column_index() as i8 - self.column_index() as i8,
-            other.row() as i8 - self.row() as i8
+            other.row() as i8 - self.row() as i8,
         );
     }
 
@@ -306,21 +306,47 @@ mod tests {
 
         let f3 = Coord::new('f', 3);
         assert_eq!('f', f3.column(), "f3");
+
     }
 
     #[test]
-    fn move_south() {
-        let mut one_south = Coord::new('a', 2);
-        one_south.mv_mut(0, -1);
-        assert_eq!(0, one_south.offset(), "a2 -> a1");
+    fn move_north() {
+        let mut one_north = Coord::new('a', 2);
+        one_north.mv_mut(0, 1);
+        assert_eq!(16, one_north.offset(), "a2 -> a3");
 
-        let mut two_south = Coord::new('b', 5);
-        two_south.mv_mut(0, -2);
-        assert_eq!(17, two_south.offset(), "b5 -> b3");
+        let mut two_north = Coord::new('b', 5);
+        two_north.mv_mut(0, 2);
+        assert_eq!(49, two_north.offset(), "b5 -> b7");
 
-        let mut seven_south = Coord::new('h', 8);
-        seven_south.mv_mut(0, -7);
-        assert_eq!(7, seven_south.offset(), "h8 -> h1");
+        let mut seven_north = Coord::new('h', 1);
+        seven_north.mv_mut(0, 7);
+        assert_eq!(63, seven_north.offset(), "h1 -> h8");
+
+        let mut one_north_over_edge = Coord::new('g', 8);
+        assert_eq!(false, one_north_over_edge.mv_mut(0, 1), "one north over edge {}", one_north_over_edge.offset());
+    }
+
+    #[test]
+    fn move_north_east() {
+        let mut one_north_east = Coord::new('a', 2);
+        one_north_east.mv_mut(1, 1);
+        assert_eq!(17, one_north_east.offset(), "a2 -> b3");
+
+        let mut two_north_east = Coord::new('b', 5);
+        two_north_east.mv_mut(2, 2);
+        assert_eq!(51, two_north_east.offset(), "b5 -> d7");
+
+        let mut seven_north_east = Coord::new('a', 1);
+        seven_north_east.mv_mut(7, 7);
+        assert_eq!(63, seven_north_east.offset(), "a1 -> h8");
+
+        let mut one_north_east_at_right_edge = Coord::new('h', 4);
+        println!("{}", one_north_east_at_right_edge.offset());
+        assert_eq!(false, one_north_east_at_right_edge.mv_mut(1, 1), "one north east at right edge {}", one_north_east_at_right_edge.offset());
+
+        let mut one_north_east_at_north_east_corner = Coord::new('h', 4);
+        assert_eq!(false, one_north_east_at_north_east_corner.mv_mut(1, 1), "one north east at north east corner {}", one_north_east_at_north_east_corner.offset());
     }
 
     #[test]
@@ -336,5 +362,45 @@ mod tests {
         let mut seven_east = Coord::new('a', 4);
         seven_east.mv_mut(7, 0);
         assert_eq!(31, seven_east.offset(), "a4 -> h4");
+
+        let mut one_east_over_edge = Coord::new('h', 8);
+        assert_eq!(false, one_east_over_edge.mv_mut(1, 0), "one east over edge {}", one_east_over_edge.offset());
     }
+
+    #[test]
+    fn move_south() {
+        let mut one_south = Coord::new('a', 2);
+        one_south.mv_mut(0, -1);
+        assert_eq!(0, one_south.offset(), "a2 -> a1");
+
+        let mut two_south = Coord::new('b', 5);
+        two_south.mv_mut(0, -2);
+        assert_eq!(17, two_south.offset(), "b5 -> b3");
+
+        let mut seven_south = Coord::new('h', 8);
+        seven_south.mv_mut(0, -7);
+        assert_eq!(7, seven_south.offset(), "h8 -> h1");
+
+        let mut one_south_over_edge = Coord::new('g', 1);
+        assert_eq!(false, one_south_over_edge.mv_mut(0, -1), "one south over edge {}", one_south_over_edge.offset());
+    }
+
+    #[test]
+    fn move_west() {
+        let mut one_west = Coord::new('b', 2);
+        one_west.mv_mut(-1, 0);
+        assert_eq!(8, one_west.offset(), "b2 -> a2");
+
+        let mut two_west = Coord::new('d', 5);
+        two_west.mv_mut(-2, 0);
+        assert_eq!(33, two_west.offset(), "d5 -> b5");
+
+        let mut seven_west = Coord::new('h', 4);
+        seven_west.mv_mut(-7, 0);
+        assert_eq!(24, seven_west.offset(), "h4 -> a4");
+
+        let mut one_west_over_edge = Coord::new('a', 8);
+        assert_eq!(false, one_west_over_edge.mv_mut(-1, 0), "one west over edge {}", one_west_over_edge.offset());
+    }
+
 }
