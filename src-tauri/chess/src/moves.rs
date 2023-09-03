@@ -1,24 +1,13 @@
+mod lookup;
+
+pub use lookup::KING_MOVES;
+
 use std::fmt::Display;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{sliding, bitboard::BitBoard, Board, Color, Coord};
-
-const KNIGHT_JUMPS: [(isize, isize); 8] = [(-2, 1), (-1, 2), (1, 2), (2, 1), (2, -1), (1, -2), (-1, -2), (-2, -1)];
-pub const KING_MOVES: [(isize, isize); 8] = [(-1, 0), (-1, 1), (0, 1), (1, 1), (1, 0), (1, -1), (0, -1), (-1, -1)];
-
-const WHITE_KING: Coord = Coord { offset: 4 };
-const BLACK_KING: Coord = Coord { offset: 60 };
-
-const WHITE_LEFT_ROOK: BitBoard = BitBoard(1);
-const WHITE_RIGHT_ROOK: BitBoard = BitBoard(128);
-const BLACK_LEFT_ROOK: BitBoard = BitBoard(72057594037927936);
-const BLACK_RIGHT_ROOK: BitBoard = BitBoard(9223372036854775808);
-
-const WHITE_RIGHT_CASTLE_MASK: BitBoard = BitBoard(96);
-const WHITE_LEFT_CASTLE_MASK: BitBoard = BitBoard(14);
-const BLACK_RIGHT_CASTLE_MASK: BitBoard = BitBoard(6917529027641081856);
-const BLACK_LEFT_CASTLE_MASK: BitBoard = BitBoard(1008806316530991104);
+use crate::{bitboard::BitBoard, sliding, Board, Color, Coord};
+use lookup::*;
 
 pub fn get_moves(board: &Board) -> Vec<Move> {
     let mut moves: Vec<Move> = Vec::new();
@@ -200,16 +189,7 @@ fn get_en_passant_move(from: Coord, board: &Board) -> BitBoard {
 }
 
 fn get_knight_moves(from: Coord, board: &Board) -> BitBoard {
-    let mut knight_moves = BitBoard::new(0);
-
-    for jump in &KNIGHT_JUMPS {
-        if let Some(target) = from.mv(jump.0, jump.1) {
-            knight_moves.set(target);
-        }
-    }
-
-    knight_moves &= !board.turning_side().all();
-
+    let knight_moves = &KNIGHT_MOVE_MAP[from.offset()] & !board.turning_side().all();
     return filter(from, knight_moves, board);
 }
 
@@ -276,7 +256,7 @@ fn get_castling_moves(board: &Board) -> BitBoard {
         }
     }
 
-    return filter(from, moves, board);
+    return moves;
 }
 
 fn filter(from: Coord, moves: BitBoard, board: &Board) -> BitBoard {
