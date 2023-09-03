@@ -1,6 +1,14 @@
 [workspace]
-
 members = [
     "app",
-    "chess"
+    "chess",
+    "profile",
+    "scratch"
 ]
+
+[profile.release]
+lto = true
+
+[profile.trace]
+inherits = "release"
+debug = 1
