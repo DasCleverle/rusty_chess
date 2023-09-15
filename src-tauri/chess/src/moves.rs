@@ -195,20 +195,10 @@ fn get_knight_moves(from: Coord, board: &Board) -> BitBoard {
 
 fn get_king_moves(board: &Board) -> BitBoard {
     let turning_side = board.turning_side();
+    let opponent_side = board.opponent_side();
     let from = turning_side.king_coord();
 
-    let mut king_moves = BitBoard::new(0);
-
-    for direction in &KING_MOVES {
-        if let Some(target) = from.mv(direction.0, direction.1) {
-            king_moves.set(target);
-        }
-    }
-
-    king_moves &= !turning_side.all();
-    king_moves &= !board.opponent_side().attacked_squares();
-
-    return king_moves;
+    return &KING_MOVE_MAP[from.offset()] & !turning_side.all() & !opponent_side.attacked_squares();
 }
 
 fn get_castling_moves(board: &Board) -> BitBoard {
