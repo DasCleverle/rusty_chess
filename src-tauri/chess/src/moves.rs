@@ -1,4 +1,5 @@
 mod lookup;
+mod sliding;
 
 pub use lookup::KING_MOVES;
 
@@ -6,7 +7,7 @@ use std::fmt::Display;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{bitboard::BitBoard, sliding, Board, Color, Coord};
+use crate::{bitboard::BitBoard, Board, Color, Coord};
 use lookup::*;
 
 pub fn get_moves(board: &Board) -> Vec<Move> {

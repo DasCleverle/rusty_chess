@@ -2225,6 +2225,7 @@ name = "scratch"
 version = "0.1.0"
 dependencies = [
  "chess",
+ "rand 0.8.5",
 ]
 
 [[package]]

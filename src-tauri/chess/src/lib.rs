@@ -13,4 +13,3 @@ mod coord;
 mod fen;
 mod moves;
 mod piece;
-mod sliding;

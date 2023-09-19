@@ -1,5 +1,5 @@
 use core::fmt;
-use std::ops::{BitAnd, BitOr, BitXor, Not, BitOrAssign, BitAndAssign};
+use std::ops::{BitAnd, BitOr, BitXor, Not, BitOrAssign, BitAndAssign, Shl, Shr};
 
 use super::Coord;
 
@@ -35,6 +35,22 @@ impl BitBoard {
     pub fn to_usize(&self) -> usize {
         self.0 as usize
     }
+
+    pub fn count_ones(&self) -> u32 {
+        self.0.count_ones()
+    }
+
+    pub fn count_zeros(&self) -> u32 {
+        self.0.count_zeros()
+    }
+
+    pub fn trailing_ones(&self) -> u32 {
+        self.0.trailing_ones()
+    }
+
+    pub fn trailing_zeros(&self) -> u32 {
+        self.0.trailing_zeros()
+    }
 }
 
 pub struct BitBoardIter {
@@ -46,6 +62,10 @@ impl Iterator for BitBoardIter {
     type Item = Coord;
 
     fn next(&mut self) -> Option<Self::Item> {
+        if self.value == 0 {
+            return None;
+        }
+
         if self.offset == 64 {
             return None;
         }
@@ -57,6 +77,13 @@ impl Iterator for BitBoardIter {
         }
 
         let coord = Coord::from_offset(self.offset + trailing_zeroes);
+
+        if trailing_zeroes == 63 {
+            self.value = 0;
+            self.offset = 64;
+
+            return Some(coord);
+        }
 
         self.value = self.value >> trailing_zeroes + 1;
         self.offset += trailing_zeroes + 1;
@@ -213,6 +240,38 @@ impl BitOrAssign for BitBoard {
 impl BitAndAssign for BitBoard {
     fn bitand_assign(&mut self, rhs: Self) {
         self.0 = self.0 & rhs.0;
+    }
+}
+
+impl Shl<usize> for BitBoard {
+    type Output = BitBoard;
+
+    fn shl(self, rhs: usize) -> Self::Output {
+        BitBoard(self.0 << rhs)
+    }
+}
+
+impl Shl<usize> for &BitBoard {
+    type Output = BitBoard;
+
+    fn shl(self, rhs: usize) -> Self::Output {
+        BitBoard(self.0 << rhs)
+    }
+}
+
+impl Shr<usize> for BitBoard {
+    type Output = BitBoard;
+
+    fn shr(self, rhs: usize) -> Self::Output {
+        BitBoard(self.0 << rhs)
+    }
+}
+
+impl Shr<usize> for &BitBoard {
+    type Output = BitBoard;
+
+    fn shr(self, rhs: usize) -> Self::Output {
+        BitBoard(self.0 >> rhs)
     }
 }
 

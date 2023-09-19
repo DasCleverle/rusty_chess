@@ -755,20 +755,20 @@ mod tests {
         test_move_count_depth(3, 8902)
     }
 
-    // #[test]
-    // fn move_count_depth_4() {
-    //     test_move_count_depth(4, 197281)
-    // }
-    //
-    // #[test]
-    // fn move_count_depth_5() {
-    //     test_move_count_depth(5, 4865609)
-    // }
-    //
-    // #[test]
-    // fn move_count_depth_6() {
-    //     test_move_count_depth(6, 119060324)
-    // }
+    #[test]
+    fn move_count_depth_4() {
+        test_move_count_depth(4, 197281)
+    }
+
+    #[test]
+    fn move_count_depth_5() {
+        test_move_count_depth(5, 4865609)
+    }
+
+    #[test]
+    fn move_count_depth_6() {
+        test_move_count_depth(6, 119060324)
+    }
 
     #[test]
     fn b2b4_depth_4() {
@@ -815,10 +815,10 @@ mod tests {
         test_move_count_preset(vec![("f2", "f3"), ("e7", "e5"), ("e1", "f2")], 2, 618);
     }
 
-    // #[test]
-    // fn d2d4_depth_5() {
-    //     test_move_count_preset(vec![("d2", "d4")], 5, 8879566);
-    // }
+    #[test]
+    fn d2d4_depth_5() {
+        test_move_count_preset(vec![("d2", "d4")], 5, 8879566);
+    }
 
     #[test]
     fn d2d4_e7e5_depth_4() {
