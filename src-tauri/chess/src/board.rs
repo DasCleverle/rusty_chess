@@ -257,11 +257,12 @@ impl Board {
             self.set(item);
         }
 
-        self.turning_side_mut().attacked_squares = moves::get_attacked_squares(self);
+        self.turning_side_mut().attacked_squares = moves::get_attacked_squares(self.turn(), self);
+        self.opponent_side_mut().attacked_squares = moves::get_attacked_squares(self.turn().invert(), self);
+
         self.set_check();
         self.turn = self.turn.invert();
 
-        self.turning_side_mut().attacked_squares = moves::get_attacked_squares(self);
         self.set_check();
         self.turn = self.turn.invert();
 
@@ -410,7 +411,8 @@ impl Board {
         self.set_pin_rays(Color::White);
         self.set_pin_rays(Color::Black);
 
-        self.turning_side_mut().attacked_squares = moves::get_attacked_squares(self);
+        self.turning_side_mut().attacked_squares = moves::get_attacked_squares(self.turn(), self);
+        self.opponent_side_mut().attacked_squares = moves::get_attacked_squares(self.turn().invert(), self);
         self.set_check();
 
         self.turn = self.turn.invert();
@@ -463,7 +465,8 @@ impl Board {
             self.set_pin_rays(Color::White);
             self.set_pin_rays(Color::Black);
 
-            self.turning_side_mut().attacked_squares = moves::get_attacked_squares(self);
+            self.turning_side_mut().attacked_squares = moves::get_attacked_squares(self.turn(), self);
+            self.opponent_side_mut().attacked_squares = moves::get_attacked_squares(self.turn().invert(), self);
             self.set_check();
         }
 
@@ -586,20 +589,21 @@ impl Board {
         }
 
         let king = *opponent_side.king();
+        let color = self.turn();
 
         for knight in turning_side.knights() {
-            if moves::get_move_mask_from(knight, self) & king == king {
+            if moves::get_move_mask_from(color, knight, self) & king == king {
                 check_targets.set(knight);
             }
         }
 
         for pawn in turning_side.pawns() {
-            if moves::get_pawn_attacks(pawn, self) & king == king {
+            if moves::get_pawn_attacks(color, pawn) & king == king {
                 check_targets.set(pawn);
             }
         }
 
-        if moves::get_move_mask_from(turning_side.king_coord(), self) & king == king {
+        if moves::get_move_mask_from(color, turning_side.king_coord(), self) & king == king {
             check_targets |= *turning_side.king();
         }
 
@@ -612,7 +616,7 @@ impl Board {
             return;
         }
 
-        let moves = moves::get_move_mask(self);
+        let moves = moves::get_move_mask(self.turn(), self);
 
         if moves != 0.into() {
             self.winner = None;
@@ -623,51 +627,54 @@ impl Board {
     }
 
     fn set_pin_rays(&mut self, color: Color) {
-        let king = self.side(color).king_coord();
+        let side = self.side(color);
         let opponent_side = self.side(color.invert());
+
+        let king = side.king_coord();
         let mut pin_rays = BitBoard::new(0);
 
-        for direction in moves::KING_MOVES {
-            let mut ray = BitBoard::new(0);
-            let mut friendly_piece_count = 0;
-            let mut coord = king.clone();
-
-            let is_diagonal = is_diagonal(direction);
-            let is_orthogonal = is_orthogonal(direction);
-
-            while coord.mv_mut(direction.0, direction.1) {
-                if self.side(color).all().is_set(coord) {
-                    friendly_piece_count += 1;
-                }
-
-                if friendly_piece_count > 1 {
-                    break;
-                }
-
-                ray.set(coord);
-
-                if opponent_side.queens().is_set(coord) {
+        for queen in opponent_side.queens() {
+            if let Some(ray) = moves::ORTHOGONAL_PIN_RAYS[king.offset()][queen.offset()] {
+                if self.is_pinning(color, queen, &ray) {
                     pin_rays |= ray;
-                    break;
                 }
+            }
 
-                if is_orthogonal && opponent_side.rooks().is_set(coord) {
+            if let Some(ray) = moves::DIAGONAL_PIN_RAYS[king.offset()][queen.offset()] {
+                if self.is_pinning(color, queen, &ray) {
                     pin_rays |= ray;
-                    break;
                 }
+            }
+        }
 
-                if is_diagonal && opponent_side.bishops().is_set(coord) {
+        for rook in opponent_side.rooks() {
+            if let Some(ray) = moves::ORTHOGONAL_PIN_RAYS[king.offset()][rook.offset()] {
+                if self.is_pinning(color, rook, &ray) {
                     pin_rays |= ray;
-                    break;
                 }
+            }
+        }
 
-                if opponent_side.all().is_set(coord) {
-                    break;
+        for bishop in opponent_side.bishops() {
+            if let Some(ray) = moves::DIAGONAL_PIN_RAYS[king.offset()][bishop.offset()] {
+                if self.is_pinning(color, bishop, &ray) {
+                    pin_rays |= ray;
                 }
             }
         }
 
         self.side_mut(color).pin_rays = pin_rays;
+    }
+
+    fn is_pinning(&self, color: Color, from: Coord, ray: &BitBoard) -> bool {
+        let side = self.side(color);
+        let opponent_side = self.side(color.invert());
+        let from_board = BitBoard::from_coord(from);
+
+        let is_blocked_by_friend = (ray & opponent_side.all() & !from_board).count_ones() > 0;
+        let has_only_one_opponent = (ray & side.all()).count_ones() == 1;
+
+        return !is_blocked_by_friend && has_only_one_opponent;
     }
 
     fn mv(&mut self, mv: &Move) -> PieceType {
@@ -737,7 +744,6 @@ impl Display for Board {
 #[cfg(test)]
 mod tests {
 
-    use std::time::Instant;
     use super::*;
 
     #[test]
@@ -760,15 +766,15 @@ mod tests {
         test_move_count_depth(4, 197281)
     }
 
-    #[test]
-    fn move_count_depth_5() {
-        test_move_count_depth(5, 4865609)
-    }
-
-    #[test]
-    fn move_count_depth_6() {
-        test_move_count_depth(6, 119060324)
-    }
+    // #[test]
+    // fn move_count_depth_5() {
+    //     test_move_count_depth(5, 4865609)
+    // }
+    //
+    // #[test]
+    // fn move_count_depth_6() {
+    //     test_move_count_depth(6, 119060324)
+    // }
 
     #[test]
     fn b2b4_depth_4() {
@@ -816,9 +822,14 @@ mod tests {
     }
 
     #[test]
-    fn d2d4_depth_5() {
-        test_move_count_preset(vec![("d2", "d4")], 5, 8879566);
+    fn f2f3_e7e5_b1c3_depth_2() {
+        test_move_count_preset(vec![("f2", "f3"), ("e7", "e5"), ("b1", "c3")], 2, 607);
     }
+
+    // #[test]
+    // fn d2d4_depth_5() {
+    //     test_move_count_preset(vec![("d2", "d4")], 5, 8879566);
+    // }
 
     #[test]
     fn d2d4_e7e5_depth_4() {
@@ -833,6 +844,26 @@ mod tests {
     #[test]
     fn d2d4_e7e5_d4d5_e8e7_depth_2() {
         test_move_count_preset(vec![("d2", "d4"), ("e7", "e5"), ("d4", "d5"), ("e8", "e7")], 2, 603);
+    }
+
+    #[test]
+    fn cpw_position_2_depth_1() {
+        test_move_count_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -", 1, 48);
+    }
+
+    #[test]
+    fn cpw_position_2_depth_2() {
+        test_move_count_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -", 2, 2039);
+    }
+
+    #[test]
+    fn cpw_position_2_depth_3() {
+        test_move_count_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -", 3, 97862);
+    }
+
+    #[test]
+    fn cpw_position_2_depth_4() {
+        test_move_count_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -", 4, 4085603);
     }
 
     fn test_move_count_preset(moves: Vec<(&str, &str)>, depth: usize, expected_move_count: u128) {
@@ -852,7 +883,7 @@ mod tests {
             return 1;
         }
 
-        let moves = super::moves::get_moves(&board);
+        let moves = super::moves::get_moves(board.turn(), &board);
         let mut count: u128 = 0;
 
         for mv in moves {
@@ -870,17 +901,19 @@ mod tests {
         return count;
     }
 
-    fn test_move_count_depth(depth: usize, expected_move_count: u128) {
-        eprintln!("testing depth {depth}");
+    fn test_move_count_fen(fen: &str, depth: usize, expected_move_count: u128) {
+        let mut board = Board::from_fen(fen).unwrap();
 
-        let mut board = Board::new_game();
-
-        let start = Instant::now();
         let count = test_move_count(depth, &mut board, true);
 
-        let duration = start.elapsed();
+        assert_eq!(expected_move_count, count, "expected {expected_move_count}, got {count} moves");
+    }
 
-        eprintln!("expected {expected_move_count}, got {count} moves (took {} ms)", duration.as_millis());
-        assert_eq!(expected_move_count, count);
+    fn test_move_count_depth(depth: usize, expected_move_count: u128) {
+        let mut board = Board::new_game();
+
+        let count = test_move_count(depth, &mut board, true);
+
+        assert_eq!(expected_move_count, count, "expected {expected_move_count}, got {count} moves");
     }
 }

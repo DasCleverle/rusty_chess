@@ -7,7 +7,7 @@ fn test_move_count(depth: usize, board: &mut Board, log: bool) -> u128 {
         return 1;
     }
 
-    let moves = chess::get_moves(&board);
+    let moves = chess::get_moves(board.turn(), &board);
     let mut count: u128 = 0;
 
     for mv in moves {

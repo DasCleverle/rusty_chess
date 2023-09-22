@@ -80,7 +80,7 @@ fn get_board_cmd(state: State<BoardState>) -> BoardPayload {
 #[tauri::command]
 fn get_available_moves(coord: Coord, state: State<BoardState>) -> CommandResult<Vec<Move>> {
     let board = get_board(state);
-    let all_moves = chess::get_moves(&*board);
+    let all_moves = chess::get_moves(board.turn(), &*board);
     let moves_from = all_moves.into_iter().filter(|mv| mv.from == coord).collect::<Vec<Move>>();
 
     return Ok(moves_from);
