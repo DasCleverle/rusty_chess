@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use crate::{Piece, Color, PieceType, Coord};
+use crate::{Color, Coord, Piece, PieceType};
 
 #[derive(Debug, thiserror::Error)]
 pub enum FenError {
@@ -12,18 +12,47 @@ pub enum FenError {
 
     #[error("Invalid character '{0}'")]
     InvalidCharacter(char),
+
+    #[error("Unknown color '{0}'")]
+    UnknownColor(String),
 }
 
-pub fn parse_fen(fen_str: &str) -> Result<Vec<Piece>, FenError> {
+pub struct FenResult {
+    pub pieces: Vec<Piece>,
+    pub turn: Color,
+    pub castling_rules: CastlingRules,
+    pub en_passant_square: Option<Coord>,
+}
+
+pub struct CastlingRules {
+    pub white_queenside: bool,
+    pub white_kingside: bool,
+
+    pub black_queenside: bool,
+    pub black_kingside: bool,
+}
+
+pub fn parse_fen(fen_str: &str) -> Result<FenResult, FenError> {
     let mut parts = fen_str.split(' ');
 
     let pieces = parts.next().ok_or(FenError::InvalidFenString)?;
-    // let turn = parts.next().ok_or(FenError::InvalidFenString)?;
-    // let castling = parts.next().ok_or(FenError::InvalidFenString)?;
-    // let en_passant_square = parts.next().ok_or(FenError::InvalidFenString)?;
+    let turn = parts.next().ok_or(FenError::InvalidFenString)?;
+    let castling = parts.next().ok_or(FenError::InvalidFenString)?;
+    let en_passant_square = parts.next().ok_or(FenError::InvalidFenString)?;
 
-    return parse_pieces(pieces);
+    let pieces = parse_pieces(pieces)?;
+    let turn = parse_turn(turn)?;
+    let castling_rules = parse_castling_rules(castling)?;
+    let en_passant_square = parse_en_passant(en_passant_square);
+
+    return Ok(FenResult {
+        pieces,
+        turn,
+        castling_rules,
+        en_passant_square
+    });
 }
+
 
 fn parse_pieces(pieces_str: &str) -> Result<Vec<Piece>, FenError> {
     let rows = pieces_str.split('/').collect::<Vec<&str>>();
@@ -64,6 +93,44 @@ fn parse_pieces(pieces_str: &str) -> Result<Vec<Piece>, FenError> {
     return Ok(pieces);
 }
 
+fn parse_turn(turn: &str) -> Result<Color, FenError> {
+    match turn {
+        "w" => Ok(Color::White),
+        "b" => Ok(Color::Black),
+        _ => Err(FenError::UnknownColor(turn.into())),
+    }
+}
+
+fn parse_castling_rules(castling: &str) -> Result<CastlingRules, FenError> {
+    let mut rules = CastlingRules {
+        white_queenside: false,
+        white_kingside: false,
+        black_queenside: false,
+        black_kingside: false,
+    };
+
+    for c in castling.chars() {
+        match c {
+            'K' => rules.white_kingside = true,
+            'k' => rules.black_kingside = true,
+            'Q' => rules.white_queenside = true,
+            'q' => rules.black_queenside = true,
+            '-' => {}
+            _ => return Err(FenError::InvalidFenString)
+        };
+    }
+
+    return Ok(rules);
+
+}
+
+fn parse_en_passant(en_passant_square: &str) -> Option<Coord> {
+    match en_passant_square {
+        "-" => None,
+        s => Coord::from_str(s)
+    }
+}
+
 fn get_piece(c: char, offset: isize) -> Option<Piece> {
     if !c.is_ascii_alphabetic() {
         return None;
@@ -90,7 +157,7 @@ mod tests {
 
     #[test]
     fn one_piece() {
-        let items = parse_fen("k7/8/8/8/8/8/8/8").unwrap();
+        let items = parse_fen("k7/8/8/8/8/8/8/8 w - -").unwrap().pieces;
 
         assert_eq!(1, items.len(), "len is not 1");
 
@@ -101,7 +168,7 @@ mod tests {
 
     #[test]
     fn spaces() {
-        let items = parse_fen("k3q3/8/8/8/8/8/8/8").unwrap();
+        let items = parse_fen("k3q3/8/8/8/8/8/8/8 w - -").unwrap().pieces;
 
         assert_eq!(2, items.len(), "len is not 2");
 
@@ -116,7 +183,7 @@ mod tests {
 
     #[test]
     fn multiple_rows() {
-        let items = parse_fen("k3q3/r7/8/8/8/8/8/8").unwrap();
+        let items = parse_fen("k3q3/r7/8/8/8/8/8/8 w - -").unwrap().pieces;
 
         assert_eq!(3, items.len(), "len is not 3");
 
@@ -135,7 +202,7 @@ mod tests {
 
     #[test]
     fn starts_with_spaces() {
-        let items = parse_fen("3kq3/7r/8/8/8/8/8/8").unwrap();
+        let items = parse_fen("3kq3/7r/8/8/8/8/8/8 w - -").unwrap().pieces;
 
         assert_eq!(3, items.len(), "len is not 3");
 
@@ -154,7 +221,7 @@ mod tests {
 
     #[test]
     fn adjacent_pieces() {
-        let items = parse_fen("kq6/7r/8/8/8/8/8/8").unwrap();
+        let items = parse_fen("kq6/7r/8/8/8/8/8/8 w - -").unwrap().pieces;
 
         assert_eq!(3, items.len(), "len is not 3");
 
@@ -173,14 +240,14 @@ mod tests {
 
     #[test]
     fn start_position() {
-        let items = parse_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR").unwrap();
+        let items = parse_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w - -").unwrap().pieces;
 
         assert_eq!(32, items.len(), "len is not 32");
     }
 
     #[test]
     fn endgame() {
-        let items = parse_fen("8/2k5/8/7p/8/8/4K3/R6R").unwrap();
+        let items = parse_fen("8/2k5/8/7p/8/8/4K3/R6R w - -").unwrap().pieces;
         let mut index = 0;
 
         assert_eq!(5, items.len(), "len is not 5");
@@ -190,6 +257,51 @@ mod tests {
         assert_piece(&items, &mut index, "e2", PieceType::King, Color::White);
         assert_piece(&items, &mut index, "a1", PieceType::Rook, Color::White);
         assert_piece(&items, &mut index, "h1", PieceType::Rook, Color::White);
+    }
+
+    #[test]
+    fn whites_turn() {
+        let result = parse_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w - -").unwrap();
+        assert_eq!(Color::White, result.turn);
+    }
+
+    #[test]
+    fn blacks_turn() {
+        let result = parse_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b - -").unwrap();
+        assert_eq!(Color::Black, result.turn);
+    }
+
+    #[test]
+    fn white_full_castling_rights() {
+        let result = parse_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQ -").unwrap();
+        assert_eq!(true, result.castling_rules.white_queenside);
+        assert_eq!(true, result.castling_rules.white_kingside);
+        assert_eq!(false, result.castling_rules.black_queenside);
+        assert_eq!(false, result.castling_rules.black_kingside);
+    }
+
+    #[test]
+    fn black_full_castling_rights() {
+        let result = parse_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w kq -").unwrap();
+        assert_eq!(false, result.castling_rules.white_queenside);
+        assert_eq!(false, result.castling_rules.white_kingside);
+        assert_eq!(true, result.castling_rules.black_queenside);
+        assert_eq!(true, result.castling_rules.black_kingside);
+    }
+
+    #[test]
+    fn mixed_castling_rights() {
+        let result = parse_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w Qk -").unwrap();
+        assert_eq!(true, result.castling_rules.white_queenside);
+        assert_eq!(false, result.castling_rules.white_kingside);
+        assert_eq!(false, result.castling_rules.black_queenside);
+        assert_eq!(true, result.castling_rules.black_kingside);
+    }
+
+    #[test]
+    fn ep_square() {
+        let result = parse_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w - e3").unwrap();
+        assert_eq!(Some(Coord::new('e', 4)), result.en_passant_square);
     }
 
     fn assert_piece(items: &Vec<Piece>, index: &mut usize, coord: &str, piece_type: PieceType, color: Color) {

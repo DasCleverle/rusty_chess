@@ -245,7 +245,7 @@ impl Board {
     }
 
     pub fn new_game() -> Board {
-        Self::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR").expect("start position to be valid")
+        Self::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").expect("start position to be valid")
     }
 
     pub fn apply_fen(&mut self, fen_str: &str) -> Result<(), FenError> {
@@ -260,9 +260,9 @@ impl Board {
 
         self.last_moves.clear();
 
-        let pieces = fen::parse_fen(fen_str)?;
+        let fen = fen::parse_fen(fen_str)?;
 
-        for item in pieces {
+        for item in fen.pieces {
             self.set(item);
         }
 
@@ -277,6 +277,15 @@ impl Board {
 
         self.set_pin_rays(Color::White);
         self.set_pin_rays(Color::Black);
+
+        self.turn = fen.turn;
+        self.en_passant_square = fen.en_passant_square;
+
+        self.white.castling_rights.queenside = fen.castling_rules.white_queenside;
+        self.white.castling_rights.kingside = fen.castling_rules.white_kingside;
+
+        self.black.castling_rights.queenside = fen.castling_rules.black_queenside;
+        self.black.castling_rights.kingside = fen.castling_rules.black_kingside;
 
         return Ok(());
     }
