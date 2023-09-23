@@ -11,7 +11,7 @@ fn test_move_count(depth: usize, board: &mut Board, log: bool) -> u128 {
     let mut count: u128 = 0;
 
     for mv in moves {
-        board.exec_move(mv).unwrap();
+        board.exec_move(&mv).unwrap();
         let depth_count = test_move_count(depth - 1, board, false);
 
         if log {

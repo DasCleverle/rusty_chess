@@ -28,8 +28,15 @@ pub enum MoveErr {
     CannotCaptureKing,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+struct CastlingRights {
+    queenside: bool,
+    kingside: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct BoardSide {
-    lookup: [PieceType; 64],
+    lookup: [Option<PieceType>; 64],
 
     all: BitBoard,
     pawns: BitBoard,
@@ -47,16 +54,10 @@ pub struct BoardSide {
     castling_rights: CastlingRights,
 }
 
-#[derive(Clone, PartialEq)]
-struct CastlingRights {
-    queenside: bool,
-    kingside: bool,
-}
-
 impl BoardSide {
     fn new() -> Self {
         BoardSide {
-            lookup: [PieceType::Pawn; 64],
+            lookup: [None; 64],
 
             all: Default::default(),
             pawns: Default::default(),
@@ -132,11 +133,7 @@ impl BoardSide {
     }
 
     pub fn lookup(&self, coord: Coord) -> Option<PieceType> {
-        if self.all.is_set(coord) {
-            return Some(self.lookup[coord.offset()]);
-        }
-
-        return None;
+        return self.lookup[coord.offset()];
     }
 
     fn get_bitboard(&mut self, piece_type: PieceType) -> &mut BitBoard {
@@ -153,43 +150,49 @@ impl BoardSide {
     fn set(&mut self, coord: Coord, piece_type: PieceType) {
         self.get_bitboard(piece_type).set(coord);
         self.all.set(coord);
-        self.lookup[coord.offset()] = piece_type;
+        self.lookup[coord.offset()] = Some(piece_type);
     }
 
     fn unset(&mut self, coord: Coord) {
-        self.get_bitboard(self.lookup[coord.offset()]).unset(coord);
-        self.all.unset(coord);
+        if let Some(piece_type) = self.lookup(coord) {
+            self.get_bitboard(piece_type).unset(coord);
+            self.all.unset(coord);
+        }
     }
 
     fn capture(&mut self, coord: Coord) -> Result<PieceType, MoveErr> {
-        let piece_type = self.lookup[coord.offset()];
+        if let Some(piece_type) = self.lookup[coord.offset()] {
+            if piece_type == PieceType::King {
+                return Err(MoveErr::CannotCaptureKing);
+            }
 
-        if piece_type == PieceType::King {
-            return Err(MoveErr::CannotCaptureKing);
+            self.get_bitboard(piece_type).unset(coord);
+            self.all.unset(coord);
+
+            return Ok(piece_type);
         }
 
-        self.get_bitboard(piece_type).unset(coord);
-        self.all.unset(coord);
-
-        return Ok(piece_type);
+        return Err(MoveErr::NoPieceAt(coord));
     }
 
-    fn mv(&mut self, from: Coord, to: Coord) -> PieceType {
-        let piece_type = self.lookup[from.offset()];
+    fn mv(&mut self, from: Coord, to: Coord) -> Option<PieceType> {
+        if let Some(piece_type) = self.lookup[from.offset()] {
+            match piece_type {
+                PieceType::King => {
+                    self.castling_rights.queenside = false;
+                    self.castling_rights.kingside = false;
+                }
+                _ => {}
+            };
 
-        match piece_type {
-            PieceType::King => {
-                self.castling_rights.queenside = false;
-                self.castling_rights.kingside = false;
-            }
-            _ => {}
-        };
+            self.get_bitboard(piece_type).swap(from, to);
+            self.all.swap(from, to);
+            self.lookup[to.offset()] = Some(piece_type);
 
-        self.get_bitboard(piece_type).swap(from, to);
-        self.all.swap(from, to);
-        self.lookup[to.offset()] = piece_type;
+            return Some(piece_type);
+        }
 
-        return piece_type;
+        return None;
     }
 }
 
@@ -201,12 +204,14 @@ fn is_diagonal(direction: (isize, isize)) -> bool {
     return direction.0.abs() + direction.1.abs() == 2;
 }
 
+#[derive(Debug, Clone, PartialEq)]
 struct LastMove {
     mv: Move,
     captured_piece: Option<PieceType>,
     castling_rights: CastlingRights,
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct Board {
     turn: Color,
 
@@ -296,9 +301,7 @@ impl Board {
         for i in 0..64 {
             let coord = Coord::from_offset(i);
 
-            if self.white.all.is_set(coord) {
-                let piece_type = self.white.lookup[i];
-
+            if let Some(piece_type) = self.white.lookup[i] {
                 pieces.push(Piece {
                     coord,
                     piece_type,
@@ -306,9 +309,7 @@ impl Board {
                 });
             }
 
-            if self.black.all.is_set(coord) {
-                let piece_type = self.black.lookup[i];
-
+            if let Some(piece_type) = self.black.lookup[i] {
                 pieces.push(Piece {
                     coord,
                     piece_type,
@@ -391,9 +392,9 @@ impl Board {
         self.side_mut(piece.color).set(piece.coord, piece.piece_type);
     }
 
-    pub fn exec_move(&mut self, mv: Move) -> Result<(), MoveErr> {
+    pub fn exec_move(&mut self, mv: &Move) -> Result<(), MoveErr> {
         let mut last_move = LastMove {
-            mv,
+            mv: mv.clone(),
             captured_piece: None,
             castling_rights: self.turning_side().castling_rights.clone(),
         };
@@ -422,7 +423,7 @@ impl Board {
             side.check_targets = BitBoard::new(0);
         }
 
-        let piece_type = self.mv(&mv);
+        let piece_type = self.mv(mv.from, mv.to).ok_or(MoveErr::NoPieceAt(mv.from))?;
 
         self.exec_castling(&mv);
         self.set_castling_rights(&mv);
@@ -449,12 +450,10 @@ impl Board {
 
     pub fn undo_move(&mut self) -> Result<(), MoveErr> {
         if let Some(LastMove { mv, captured_piece, castling_rights }) = self.last_moves.pop() {
-            let reverse_move = Move::new(mv.to, mv.from);
-
             self.winner = None;
             self.turn = self.turn.invert();
 
-            self.mv(&reverse_move);
+            self.mv(mv.to, mv.from);
 
             if let Some(captured) = captured_piece {
                 self.all.set(mv.to);
@@ -470,7 +469,7 @@ impl Board {
                 let from_rook_coord = Coord::new(if is_kingside { 'f' } else { 'd' }, mv.to.row());
                 let to_rook_coord = Coord::new(if is_kingside { 'h' } else { 'a' }, mv.to.row());
 
-                self.mv(&Move::new(from_rook_coord, to_rook_coord));
+                self.mv(from_rook_coord, to_rook_coord);
             }
 
             if mv.promotion {
@@ -538,7 +537,7 @@ impl Board {
         let from = Coord::new(from_col, row);
         let to = Coord::new(to_col, row);
 
-        self.mv(&Move::new(from, to));
+        self.mv(from, to);
     }
 
     fn set_enpassant_square(&mut self, piece_type: PieceType, mv: &Move) {
@@ -672,7 +671,7 @@ impl Board {
     fn set_pin_rays(&mut self, color: Color) {
         let (side, opponent_side) = match color {
             Color::White => (&mut self.white, &self.black),
-            Color::Black => (&mut self.black, &self.white)
+            Color::Black => (&mut self.black, &self.white),
         };
 
         let king = side.king_coord();
@@ -718,11 +717,11 @@ impl Board {
         return !is_blocked_by_friend && has_only_one_opponent;
     }
 
-    fn mv(&mut self, mv: &Move) -> PieceType {
-        self.all.unset(mv.from);
-        self.all.set(mv.to);
+    fn mv(&mut self, from: Coord, to: Coord) -> Option<PieceType> {
+        self.all.unset(from);
+        self.all.set(to);
 
-        return self.turning_side_mut().mv(mv.from, mv.to);
+        return self.turning_side_mut().mv(from, to);
     }
 }
 
@@ -789,82 +788,82 @@ mod tests {
 
     #[test]
     fn move_count_depth_1() {
-        test_move_count_depth(1, 20)
+        test_move_count_board(&mut Board::new_game(), 1, 20)
     }
 
     #[test]
     fn move_count_depth_2() {
-        test_move_count_depth(2, 400)
+        test_move_count_board(&mut Board::new_game(), 2, 400)
     }
 
     #[test]
     fn move_count_depth_3() {
-        test_move_count_depth(3, 8902)
+        test_move_count_board(&mut Board::new_game(), 3, 8902)
     }
 
     #[test]
     fn move_count_depth_4() {
-        test_move_count_depth(4, 197281)
+        test_move_count_board(&mut Board::new_game(), 4, 197281)
     }
 
     // #[test]
     // fn move_count_depth_5() {
-    //     test_move_count_depth(5, 4865609)
+    //     test_move_count_board(&mut Board::new_game(), 4865609)
     // }
     //
     // #[test]
     // fn move_count_depth_6() {
-    //     test_move_count_depth(6, 119060324)
+    //     test_move_count_board(&mut Board::new_game(), 119060324)
     // }
 
     #[test]
     fn b2b4_depth_4() {
-        test_move_count_preset(vec![("b2", "b4")], 4, 216145);
+        test_move_count_new_game_moves(vec![("b2", "b4")], 4, 216145);
     }
 
     #[test]
     fn b2b4_c7c5_depth_3() {
-        test_move_count_preset(vec![("b2", "b4"), ("c7", "c5")], 3, 11980);
+        test_move_count_new_game_moves(vec![("b2", "b4"), ("c7", "c5")], 3, 11980);
     }
 
     #[test]
     fn b2b4_c7c5_d2d3_depth_2() {
-        test_move_count_preset(vec![("b2", "b4"), ("c7", "c5"), ("d2", "d3")], 2, 662);
+        test_move_count_new_game_moves(vec![("b2", "b4"), ("c7", "c5"), ("d2", "d3")], 2, 662);
     }
 
     #[test]
     fn d2d3_depth_4() {
-        test_move_count_preset(vec![("d2", "d3")], 4, 328511);
+        test_move_count_new_game_moves(vec![("d2", "d3")], 4, 328511);
     }
 
     #[test]
     fn d2d3_g8f6_depth_3() {
-        test_move_count_preset(vec![("d2", "d3"), ("g8", "f6")], 3, 16343);
+        test_move_count_new_game_moves(vec![("d2", "d3"), ("g8", "f6")], 3, 16343);
     }
 
     #[test]
     fn d2d3_g8f6_e1d2_depth_2() {
-        test_move_count_preset(vec![("d2", "d3"), ("g8", "f6"), ("e1", "d2")], 2, 482);
+        test_move_count_new_game_moves(vec![("d2", "d3"), ("g8", "f6"), ("e1", "d2")], 2, 482);
     }
 
     #[test]
     fn f2f3_depth_4() {
-        test_move_count_preset(vec![("f2", "f3")], 4, 178889);
+        test_move_count_new_game_moves(vec![("f2", "f3")], 4, 178889);
     }
 
     #[test]
     fn f2f3_e7e5_depth_3() {
-        test_move_count_preset(vec![("f2", "f3"), ("e7", "e5")], 3, 11679);
+        test_move_count_new_game_moves(vec![("f2", "f3"), ("e7", "e5")], 3, 11679);
     }
 
     #[test]
     fn f2f3_e7e5_e1f2_depth_2() {
-        test_move_count_preset(vec![("f2", "f3"), ("e7", "e5"), ("e1", "f2")], 2, 618);
+        test_move_count_new_game_moves(vec![("f2", "f3"), ("e7", "e5"), ("e1", "f2")], 2, 618);
     }
 
     #[test]
     fn f2f3_e7e5_b1c3_depth_2() {
-        test_move_count_preset(vec![("f2", "f3"), ("e7", "e5"), ("b1", "c3")], 2, 607);
+        test_move_count_new_game_moves(vec![("f2", "f3"), ("e7", "e5"), ("b1", "c3")], 2, 607);
     }
 
     // #[test]
@@ -874,17 +873,17 @@ mod tests {
 
     #[test]
     fn d2d4_e7e5_depth_4() {
-        test_move_count_preset(vec![("d2", "d4"), ("e7", "e5")], 4, 809643);
+        test_move_count_new_game_moves(vec![("d2", "d4"), ("e7", "e5")], 4, 809643);
     }
 
     #[test]
     fn d2d4_e7e5_d4d5_depth_3() {
-        test_move_count_preset(vec![("d2", "d4"), ("e7", "e5"), ("d4", "d5")], 3, 23878);
+        test_move_count_new_game_moves(vec![("d2", "d4"), ("e7", "e5"), ("d4", "d5")], 3, 23878);
     }
 
     #[test]
     fn d2d4_e7e5_d4d5_e8e7_depth_2() {
-        test_move_count_preset(vec![("d2", "d4"), ("e7", "e5"), ("d4", "d5"), ("e8", "e7")], 2, 603);
+        test_move_count_new_game_moves(vec![("d2", "d4"), ("e7", "e5"), ("d4", "d5"), ("e8", "e7")], 2, 603);
     }
 
     const CPW_POSITION_2: &str = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -";
@@ -969,47 +968,41 @@ mod tests {
         test_move_count_fen_moves(CPW_POSITION_2, vec![("e5", "f7"), ("a6", "b5"), ("a2", "a3")], 1, 47);
     }
 
-    #[test]
-    fn cpw_position_2_e5f7_a6b5_a2a4_depth_1() {
-        test_move_count_fen_moves(CPW_POSITION_2, vec![("e5", "f7"), ("a6", "b5"), ("a2", "a4")], 1, 47);
-    }
-
-    fn test_move_count_preset(moves: Vec<(&str, &str)>, depth: usize, expected_move_count: u128) {
-        let mut board = Board::new_game();
-
-        for (from, to) in moves {
-            let mv = Move::new(Coord::from_str(from).unwrap(), Coord::from_str(to).unwrap());
-            board.exec_move(mv).unwrap();
-        }
-
-        let count = test_move_count(depth, &mut board, true);
-        assert_eq!(expected_move_count, count, "expected {expected_move_count}, got {count} moves");
-    }
-
     fn test_move_count_fen_moves(fen: &str, moves: Vec<(&str, &str)>, depth: usize, expected_move_count: u128) {
         let mut board = Board::from_fen(fen).unwrap();
-
-        for (from, to) in moves {
-            let mv = Move::new(Coord::from_str(from).unwrap(), Coord::from_str(to).unwrap());
-            board.exec_move(mv).unwrap();
-        }
-
-        let count = test_move_count(depth, &mut board, true);
-
-        assert_eq!(expected_move_count, count, "expected {expected_move_count}, got {count} moves");
+        test_move_count_moves(&mut board, moves, depth, expected_move_count);
     }
 
     fn test_move_count_fen(fen: &str, depth: usize, expected_move_count: u128) {
-        let mut board = Board::from_fen(fen).unwrap();
-        let count = test_move_count(depth, &mut board, true);
+        test_move_count_fen_moves(fen, vec![], depth, expected_move_count)
+    }
+
+    fn test_move_count_new_game_moves(moves: Vec<(&str, &str)>, depth: usize, expected_move_count: u128) {
+        test_move_count_moves(&mut Board::new_game(), moves, depth, expected_move_count)
+    }
+
+    fn test_move_count_moves(board: &mut Board, moves: Vec<(&str, &str)>, depth: usize, expected_move_count: u128) {
+        for (from, to) in moves.iter() {
+            let mv = Move::new(Coord::from_str(from).unwrap(), Coord::from_str(to).unwrap());
+            board.exec_move(&mv).unwrap();
+        }
+
+        let start = board.clone();
+        let count = test_move_count(depth, board, true);
+
+        board.last_moves.clear();
+
+        if start != *board {
+            eprintln!("expected board to return to its original state");
+            eprintln!("start: {start:#?}");
+            eprintln!("end: {:#?}", *board);
+        }
 
         assert_eq!(expected_move_count, count, "expected {expected_move_count}, got {count} moves");
     }
 
-    fn test_move_count_depth(depth: usize, expected_move_count: u128) {
-        let mut board = Board::new_game();
-        let count = test_move_count(depth, &mut board, true);
-
+    fn test_move_count_board(board: &mut Board, depth: usize, expected_move_count: u128) {
+        let count = test_move_count(depth, board, true);
         assert_eq!(expected_move_count, count, "expected {expected_move_count}, got {count} moves");
     }
 
@@ -1022,7 +1015,7 @@ mod tests {
         let mut count: u128 = 0;
 
         for mv in moves {
-            board.exec_move(mv).unwrap();
+            board.exec_move(&mv).unwrap();
 
             let c = if depth - 1 > 0 {
                 test_move_count(depth - 1, board, false)

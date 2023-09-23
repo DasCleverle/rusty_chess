@@ -308,7 +308,7 @@ fn into_moves(moves: &mut Vec<Move>, from: Coord, board: BitBoard) {
     }
 }
 
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Move {
     pub from: Coord,
     pub to: Coord,

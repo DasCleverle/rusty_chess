@@ -88,7 +88,7 @@ fn get_available_moves(coord: Coord, state: State<BoardState>) -> CommandResult<
 
 #[tauri::command]
 fn exec_move(mv: Move, app: AppHandle, state: State<BoardState>) -> CommandResult {
-    mutate_board(app, state, |board| board.exec_move(mv))?;
+    mutate_board(app, state, |board| board.exec_move(&mv))?;
     return Ok(());
 }
 
