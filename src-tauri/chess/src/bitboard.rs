@@ -243,6 +243,18 @@ impl BitAndAssign for BitBoard {
     }
 }
 
+impl BitOrAssign<&BitBoard> for BitBoard {
+    fn bitor_assign(&mut self, rhs: &BitBoard) {
+        self.0 = self.0 | rhs.0;
+    }
+}
+
+impl BitAndAssign<&BitBoard> for BitBoard {
+    fn bitand_assign(&mut self, rhs: &BitBoard) {
+        self.0 = self.0 & rhs.0;
+    }
+}
+
 impl Shl<usize> for BitBoard {
     type Output = BitBoard;
 

@@ -42,7 +42,7 @@ pub struct BoardSide {
     attacked_squares: BitBoard,
 
     check_targets: BitBoard,
-    pin_rays: BitBoard,
+    pin_rays: Vec<BitBoard>,
 
     castling_rights: CastlingRights,
 }
@@ -115,7 +115,7 @@ impl BoardSide {
         return &self.check_targets;
     }
 
-    pub fn pin_rays(&self) -> &BitBoard {
+    pub fn pin_rays(&self) -> &Vec<BitBoard> {
         return &self.pin_rays;
     }
 
@@ -670,50 +670,48 @@ impl Board {
     }
 
     fn set_pin_rays(&mut self, color: Color) {
-        let side = self.side(color);
-        let opponent_side = self.side(color.invert());
+        let (side, opponent_side) = match color {
+            Color::White => (&mut self.white, &self.black),
+            Color::Black => (&mut self.black, &self.white)
+        };
 
         let king = side.king_coord();
-        let mut pin_rays = BitBoard::new(0);
+
+        side.pin_rays.clear();
 
         for queen in opponent_side.queens() {
             if let Some(ray) = moves::ORTHOGONAL_PIN_RAYS[king.offset()][queen.offset()] {
-                if self.is_pinning(color, queen, &ray) {
-                    pin_rays |= ray;
+                if Self::is_pinning(side, opponent_side, queen, &ray) {
+                    side.pin_rays.push(ray);
                 }
             }
 
             if let Some(ray) = moves::DIAGONAL_PIN_RAYS[king.offset()][queen.offset()] {
-                if self.is_pinning(color, queen, &ray) {
-                    pin_rays |= ray;
+                if Self::is_pinning(side, opponent_side, queen, &ray) {
+                    side.pin_rays.push(ray);
                 }
             }
         }
 
         for rook in opponent_side.rooks() {
             if let Some(ray) = moves::ORTHOGONAL_PIN_RAYS[king.offset()][rook.offset()] {
-                if self.is_pinning(color, rook, &ray) {
-                    pin_rays |= ray;
+                if Self::is_pinning(side, opponent_side, rook, &ray) {
+                    side.pin_rays.push(ray);
                 }
             }
         }
 
         for bishop in opponent_side.bishops() {
             if let Some(ray) = moves::DIAGONAL_PIN_RAYS[king.offset()][bishop.offset()] {
-                if self.is_pinning(color, bishop, &ray) {
-                    pin_rays |= ray;
+                if Self::is_pinning(side, opponent_side, bishop, &ray) {
+                    side.pin_rays.push(ray);
                 }
             }
         }
-
-        self.side_mut(color).pin_rays = pin_rays;
     }
 
-    fn is_pinning(&self, color: Color, from: Coord, ray: &BitBoard) -> bool {
-        let side = self.side(color);
-        let opponent_side = self.side(color.invert());
+    fn is_pinning(side: &BoardSide, opponent_side: &BoardSide, from: Coord, ray: &BitBoard) -> bool {
         let from_board = BitBoard::from_coord(from);
-
         let is_blocked_by_friend = (ray & opponent_side.all() & !from_board).count_ones() > 0;
         let has_only_one_opponent = (ray & side.all()).count_ones() == 1;
 

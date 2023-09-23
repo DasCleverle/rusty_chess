@@ -33,10 +33,6 @@ pub fn get_moves(color: Color, board: &Board) -> Vec<Move> {
     }
 
     for knight in side.knights() {
-        if is_pinned(color, knight, board) {
-            continue;
-        }
-
         let knight_moves = get_knight_moves(color, knight, board);
         let knight_moves = filter(color, knight, knight_moves, board);
 
@@ -88,7 +84,7 @@ pub fn get_attacked_squares(color: Color, board: &Board) -> BitBoard {
     let side = board.side(color);
     let opponent_side = board.side(color.invert());
 
-    let blockers = board.all() & !(opponent_side.king());
+    let blockers = board.all() & !opponent_side.king();
     let friendly_pieces = BitBoard::new(0);
 
     for rook in side.rooks() {
@@ -105,15 +101,15 @@ pub fn get_attacked_squares(color: Color, board: &Board) -> BitBoard {
     }
 
     for knight in side.knights() {
-        attacked_squares |= get_knight_moves(color, knight, board);
+        attacked_squares |= KNIGHT_MOVE_MAP[knight.offset()];
     }
 
     for pawn in side.pawns() {
         attacked_squares |= get_pawn_attacks(color, pawn);
-        attacked_squares |= get_en_passant_move(pawn, board);
+        attacked_squares |= get_en_passant_move(color, pawn, board);
     }
 
-    attacked_squares |= get_king_moves(color, board);
+    attacked_squares |= KING_MOVE_MAP[side.king_coord().offset()];
 
     return attacked_squares;
 }
@@ -289,20 +285,21 @@ fn get_castling_moves(color: Color, board: &Board) -> BitBoard {
 
 fn filter(color: Color, from: Coord, moves: BitBoard, board: &Board) -> BitBoard {
     let mut moves = moves;
+    let pin_rays = board.side(color).pin_rays();
 
     if board.side(color).checked() {
-        moves &= *board.side(color).check_targets();
+        moves &= board.side(color).check_targets();
     }
-
-    if is_pinned(color, from, board) {
-        moves &= *board.side(color).pin_rays();
+    else {
+        for pin_ray in pin_rays {
+            if pin_ray.is_set(from) {
+                moves &= pin_ray;
+                break;
+            }
+        }
     }
 
     return moves;
-}
-
-fn is_pinned(color: Color, from: Coord, board: &Board) -> bool {
-    return board.side(color).pin_rays().is_set(from);
 }
 
 fn into_moves(moves: &mut Vec<Move>, from: Coord, board: BitBoard) {
