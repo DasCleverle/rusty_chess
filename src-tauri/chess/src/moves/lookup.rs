@@ -5,15 +5,20 @@ pub const KING_MOVES: [(isize, isize); 8] = [(-1, 0), (-1, 1), (0, 1), (1, 1), (
 pub const WHITE_KING: Coord = Coord { offset: 4 };
 pub const BLACK_KING: Coord = Coord { offset: 60 };
 
-pub const WHITE_LEFT_ROOK: BitBoard = BitBoard(1);
-pub const WHITE_RIGHT_ROOK: BitBoard = BitBoard(128);
-pub const BLACK_LEFT_ROOK: BitBoard = BitBoard(72057594037927936);
-pub const BLACK_RIGHT_ROOK: BitBoard = BitBoard(9223372036854775808);
+pub const WHITE_QUEENSIDE_ROOK: BitBoard = BitBoard(1);
+pub const WHITE_KINGSIDE_ROOK: BitBoard = BitBoard(128);
+pub const BLACK_QUEENSIDE_ROOK: BitBoard = BitBoard(72057594037927936);
+pub const BLACK_KINGSIDE_ROOK: BitBoard = BitBoard(9223372036854775808);
 
-pub const WHITE_RIGHT_CASTLE_MASK: BitBoard = BitBoard(96);
-pub const WHITE_LEFT_CASTLE_MASK: BitBoard = BitBoard(14);
-pub const BLACK_RIGHT_CASTLE_MASK: BitBoard = BitBoard(6917529027641081856);
-pub const BLACK_LEFT_CASTLE_MASK: BitBoard = BitBoard(1008806316530991104);
+pub const WHITE_KINGSIDE_CASTLE_ATTACK_MASK: BitBoard = BitBoard(96);
+pub const WHITE_QUEENSIDE_CASTLE_ATTACK_MASK: BitBoard = BitBoard(0xc);
+pub const BLACK_KINGSIDE_CASTLE_ATTACK_MASK: BitBoard = BitBoard(6917529027641081856);
+pub const BLACK_QUEENSIDE_CASTLE_ATTACK_MASK: BitBoard = BitBoard(0xc00000000000000);
+
+pub const WHITE_KINGSIDE_CASTLE_MOVE_MASK: BitBoard = BitBoard(96);
+pub const WHITE_QUEENSIDE_CASTLE_MOVE_MASK: BitBoard = BitBoard(0xe);
+pub const BLACK_KINGSIDE_CASTLE_MOVE_MASK: BitBoard = BitBoard(6917529027641081856);
+pub const BLACK_QUEENSIDE_CASTLE_MOVE_MASK: BitBoard = BitBoard(0xe00000000000000);
 
 pub const WHITE_PAWN_MOVES: [BitBoard; 64] = [
     BitBoard(0),

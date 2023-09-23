@@ -1,9 +1,11 @@
 mod lookup;
 mod sliding;
 
+pub use lookup::BLACK_KING;
+pub use lookup::DIAGONAL_PIN_RAYS;
 pub use lookup::KING_MOVES;
 pub use lookup::ORTHOGONAL_PIN_RAYS;
-pub use lookup::DIAGONAL_PIN_RAYS;
+pub use lookup::WHITE_KING;
 
 use std::fmt::Display;
 
@@ -142,7 +144,12 @@ fn get_rook_moves(color: Color, from: Coord, board: &Board, blockers: &BitBoard)
 }
 
 fn get_bishop_moves(color: Color, from: Coord, board: &Board, blockers: &BitBoard) -> BitBoard {
-    filter(color, from, sliding::get_bishop_move_mask(from, &blockers, board.side(color).all()), board)
+    filter(
+        color,
+        from,
+        sliding::get_bishop_move_mask(from, &blockers, board.side(color).all()),
+        board,
+    )
 }
 
 fn get_queen_moves(color: Color, from: Coord, board: &Board, blockers: &BitBoard) -> BitBoard {
@@ -152,7 +159,7 @@ fn get_queen_moves(color: Color, from: Coord, board: &Board, blockers: &BitBoard
 fn get_pawn_moves(color: Color, from: Coord, board: &Board) -> BitBoard {
     let (table, start_row, step_dir) = match color {
         Color::White => (WHITE_PAWN_MOVES, 2, 1),
-        Color::Black => (BLACK_PAWN_MOVES, 7, -1)
+        Color::Black => (BLACK_PAWN_MOVES, 7, -1),
     };
 
     let moves = table[from.offset()];
@@ -173,7 +180,7 @@ fn get_pawn_moves(color: Color, from: Coord, board: &Board) -> BitBoard {
 pub fn get_pawn_attacks(color: Color, from: Coord) -> BitBoard {
     let attacks = match color {
         Color::White => WHITE_PAWN_ATTACKS,
-        Color::Black => BLACK_PAWN_ATTACKS
+        Color::Black => BLACK_PAWN_ATTACKS,
     };
 
     return attacks[from.offset()];
@@ -210,22 +217,27 @@ fn get_castling_moves(color: Color, board: &Board) -> BitBoard {
         return BitBoard::new(0);
     }
 
-    let (left_mask, right_mask, king_start, left_rook_start, right_rook_start) = match color {
-        Color::White => (
-            WHITE_LEFT_CASTLE_MASK,
-            WHITE_RIGHT_CASTLE_MASK,
-            WHITE_KING,
-            WHITE_LEFT_ROOK,
-            WHITE_RIGHT_ROOK,
-        ),
-        Color::Black => (
-            BLACK_LEFT_CASTLE_MASK,
-            BLACK_RIGHT_CASTLE_MASK,
-            BLACK_KING,
-            BLACK_LEFT_ROOK,
-            BLACK_RIGHT_ROOK,
-        ),
-    };
+    let (queenside_mask, kingside_mask, queenside_attack_mask, kingside_attack_mask, king_start, queenside_rook_start, kingside_rook_start) =
+        match color {
+            Color::White => (
+                WHITE_QUEENSIDE_CASTLE_MOVE_MASK,
+                WHITE_KINGSIDE_CASTLE_MOVE_MASK,
+                WHITE_QUEENSIDE_CASTLE_ATTACK_MASK,
+                WHITE_KINGSIDE_CASTLE_ATTACK_MASK,
+                WHITE_KING,
+                WHITE_QUEENSIDE_ROOK,
+                WHITE_KINGSIDE_ROOK,
+            ),
+            Color::Black => (
+                BLACK_QUEENSIDE_CASTLE_MOVE_MASK,
+                BLACK_KINGSIDE_CASTLE_MOVE_MASK,
+                BLACK_QUEENSIDE_CASTLE_ATTACK_MASK,
+                BLACK_KINGSIDE_CASTLE_ATTACK_MASK,
+                BLACK_KING,
+                BLACK_QUEENSIDE_ROOK,
+                BLACK_KINGSIDE_ROOK,
+            ),
+        };
 
     let mut moves = BitBoard::new(0);
     let side = board.side(color);
@@ -236,15 +248,22 @@ fn get_castling_moves(color: Color, board: &Board) -> BitBoard {
     }
 
     let attacked = board.side(color.invert()).attacked_squares();
-    let off_limits = board.all() | attacked;
 
-    if side.can_castle_right() && (side.rooks() & right_rook_start) == right_rook_start && (off_limits & right_mask) == 0.into() {
+    if side.can_castle_kingside()
+        && (side.rooks() & kingside_rook_start) == kingside_rook_start
+        && (board.all() & kingside_mask) == 0.into()
+        && (attacked & kingside_attack_mask) == 0.into()
+    {
         if let Some(to) = from.mv(2, 0) {
             moves.set(to);
         }
     }
 
-    if side.can_castle_left() && (side.rooks() & left_rook_start) == left_rook_start && (off_limits & left_mask) == 0.into() {
+    if side.can_castle_queenside()
+        && (side.rooks() & queenside_rook_start) == queenside_rook_start
+        && (board.all() & queenside_mask) == 0.into()
+        && (attacked & queenside_attack_mask) == 0.into()
+    {
         if let Some(to) = from.mv(-2, 0) {
             moves.set(to);
         }
