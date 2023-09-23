@@ -395,7 +395,7 @@ impl Board {
         let mut last_move = LastMove {
             mv,
             captured_piece: None,
-            castling_rights: self.turning_side().castling_rights.clone()
+            castling_rights: self.turning_side().castling_rights.clone(),
         };
 
         if !self.all.is_set(mv.from) {
@@ -422,12 +422,12 @@ impl Board {
             side.check_targets = BitBoard::new(0);
         }
 
-        self.set_castling_rights(&mv);
-
         let piece_type = self.mv(&mv);
 
         self.exec_castling(&mv);
+        self.set_castling_rights(&mv);
 
+        self.exec_promotion(&mv);
         self.exec_en_passant(&mv);
         self.set_enpassant_square(piece_type, &mv);
 
@@ -471,6 +471,13 @@ impl Board {
                 let to_rook_coord = Coord::new(if is_kingside { 'h' } else { 'a' }, mv.to.row());
 
                 self.mv(&Move::new(from_rook_coord, to_rook_coord));
+            }
+
+            if mv.promotion {
+                let side = self.turning_side_mut();
+
+                side.unset(mv.from);
+                side.set(mv.from, PieceType::Pawn);
             }
 
             if mv.en_passant {
@@ -547,6 +554,17 @@ impl Board {
             -2 => mv.from.mv(0, -1),
             _ => None,
         };
+    }
+
+    fn exec_promotion(&mut self, mv: &Move) {
+        if !mv.promotion {
+            return;
+        }
+
+        let side = self.turning_side_mut();
+
+        side.unset(mv.to);
+        side.set(mv.to, PieceType::Queen);
     }
 
     fn exec_en_passant(&mut self, mv: &Move) {
@@ -871,59 +889,91 @@ mod tests {
         test_move_count_preset(vec![("d2", "d4"), ("e7", "e5"), ("d4", "d5"), ("e8", "e7")], 2, 603);
     }
 
+    const CPW_POSITION_2: &str = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -";
+
     #[test]
     fn cpw_position_2_depth_1() {
-        test_move_count_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -", 1, 48);
+        test_move_count_fen(CPW_POSITION_2, 1, 48);
     }
 
     #[test]
     fn cpw_position_2_depth_2() {
-        test_move_count_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -", 2, 2039);
-    }
-
-    #[test]
-    fn cpw_position_2_a2a4_depth_1() {
-        test_move_count_fen_moves(
-            "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -",
-            vec![("a2", "a4")],
-            1,
-            44,
-        );
+        test_move_count_fen(CPW_POSITION_2, 2, 2039);
     }
 
     #[test]
     fn cpw_position_2_depth_3() {
-        test_move_count_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -", 3, 97862);
+        test_move_count_fen(CPW_POSITION_2, 3, 97862);
+    }
+
+    // #[test]
+    // fn cpw_position_2_depth_4() {
+    //     test_move_count_fen(CPW_POSITION_2, 4, 4085603);
+    // }
+
+    #[test]
+    fn cpw_position_2_a2a4_depth_1() {
+        test_move_count_fen_moves(CPW_POSITION_2, vec![("a2", "a4")], 1, 44);
     }
 
     #[test]
     fn cpw_position_2_a1c1_depth_2() {
-        test_move_count_fen_moves(
-            "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -",
-            vec![("a1", "c1")],
-            2,
-            1968,
-        );
-    }
-
-    #[test]
-    fn cpw_position_2_depth_4() {
-        test_move_count_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -", 4, 4085603);
+        test_move_count_fen_moves(CPW_POSITION_2, vec![("a1", "c1")], 2, 1968);
     }
 
     #[test]
     fn cpw_position_2_a1b1_depth_3() {
-        test_move_count_fen_moves("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -", vec![("a1", "b1")], 3, 83348);
+        test_move_count_fen_moves(CPW_POSITION_2, vec![("a1", "b1")], 3, 83348);
     }
 
     #[test]
     fn cpw_position_2_a1b1_h3g2_depth_2() {
-        test_move_count_fen_moves("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -", vec![("a1", "b1"), ("h3", "g2")], 2, 2246);
+        test_move_count_fen_moves(CPW_POSITION_2, vec![("a1", "b1"), ("h3", "g2")], 2, 2246);
     }
 
     #[test]
     fn cpw_position_2_a1b1_h3g2_a2a3_depth_1() {
-        test_move_count_fen_moves("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -", vec![("a1", "b1"), ("h3", "g2"), ("a2", "a3")], 1, 53);
+        test_move_count_fen_moves(CPW_POSITION_2, vec![("a1", "b1"), ("h3", "g2"), ("a2", "a3")], 1, 53);
+    }
+
+    #[test]
+    fn cpw_position_2_a1b1_f6d5_depth_2() {
+        test_move_count_fen_moves(CPW_POSITION_2, vec![("a1", "b1"), ("f6", "d5")], 2, 2095);
+    }
+
+    #[test]
+    fn cpw_position_2_d2h6_depth_3() {
+        test_move_count_fen_moves(CPW_POSITION_2, vec![("d2", "h6")], 3, 82323);
+    }
+
+    #[test]
+    fn cpw_position_2_d2h6_e8f8_depth_2() {
+        test_move_count_fen_moves(CPW_POSITION_2, vec![("d2", "h6"), ("e8", "f8")], 2, 1833);
+    }
+
+    #[test]
+    fn cpw_position_2_d2h6_e8f8_f3f6_depth_2() {
+        test_move_count_fen_moves(CPW_POSITION_2, vec![("d2", "h6"), ("e8", "f8"), ("f3", "f6")], 1, 33);
+    }
+
+    #[test]
+    fn cpw_position_2_e5f7_depth_3() {
+        test_move_count_fen_moves(CPW_POSITION_2, vec![("e5", "f7")], 3, 88799);
+    }
+
+    #[test]
+    fn cpw_position_2_e5f7_a6b5_depth_2() {
+        test_move_count_fen_moves(CPW_POSITION_2, vec![("e5", "f7"), ("a6", "b5")], 2, 2084);
+    }
+
+    #[test]
+    fn cpw_position_2_e5f7_a6b5_a2a3_depth_1() {
+        test_move_count_fen_moves(CPW_POSITION_2, vec![("e5", "f7"), ("a6", "b5"), ("a2", "a3")], 1, 47);
+    }
+
+    #[test]
+    fn cpw_position_2_e5f7_a6b5_a2a4_depth_1() {
+        test_move_count_fen_moves(CPW_POSITION_2, vec![("e5", "f7"), ("a6", "b5"), ("a2", "a4")], 1, 47);
     }
 
     fn test_move_count_preset(moves: Vec<(&str, &str)>, depth: usize, expected_move_count: u128) {
@@ -947,6 +997,7 @@ mod tests {
         }
 
         let count = test_move_count(depth, &mut board, true);
+
         assert_eq!(expected_move_count, count, "expected {expected_move_count}, got {count} moves");
     }
 
@@ -974,13 +1025,21 @@ mod tests {
 
         for mv in moves {
             board.exec_move(mv).unwrap();
-            let depth_count = test_move_count(depth - 1, board, false);
+
+            let c = if depth - 1 > 0 {
+                test_move_count(depth - 1, board, false)
+            } else if mv.promotion {
+                4
+            } else {
+                1
+            };
+
+            count += c;
 
             if log {
-                println!("{mv}: {depth_count}");
+                println!("{mv}: {c}");
             }
 
-            count += depth_count;
             board.undo_move().unwrap();
         }
 

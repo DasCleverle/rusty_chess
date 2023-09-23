@@ -20,6 +20,9 @@ pub const WHITE_QUEENSIDE_CASTLE_MOVE_MASK: BitBoard = BitBoard(0xe);
 pub const BLACK_KINGSIDE_CASTLE_MOVE_MASK: BitBoard = BitBoard(6917529027641081856);
 pub const BLACK_QUEENSIDE_CASTLE_MOVE_MASK: BitBoard = BitBoard(0xe00000000000000);
 
+pub const WHITE_PROMOTION_ROW: BitBoard = BitBoard(0xff00000000000000);
+pub const BLACK_PROMOTION_ROW: BitBoard = BitBoard(0xff);
+
 pub const WHITE_PAWN_MOVES: [BitBoard; 64] = [
     BitBoard(0),
     BitBoard(0),

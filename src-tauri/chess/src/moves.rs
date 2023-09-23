@@ -44,18 +44,28 @@ pub fn get_moves(color: Color, board: &Board) -> Vec<Move> {
     }
 
     for pawn in side.pawns() {
+        let promotion_row = match color {
+            Color::White => WHITE_PROMOTION_ROW,
+            Color::Black => BLACK_PROMOTION_ROW,
+        };
+
         let pawn_moves = get_pawn_moves(color, pawn, board);
         let pawn_attacks = get_pawn_attacks(color, pawn) & opponent_side.all();
-        let en_passant_moves = get_en_passant_move(pawn, board);
+        let en_passant_moves = get_en_passant_move(color, pawn, board);
 
         let f_pawn_moves = filter(color, pawn, pawn_moves, board);
         let f_pawn_attacks = filter(color, pawn, pawn_attacks, board);
+        let f_en_passant_moves = filter(color, pawn, en_passant_moves, board);
 
-        into_moves(&mut moves, pawn, f_pawn_moves);
-        into_moves(&mut moves, pawn, f_pawn_attacks);
+        into_moves(&mut moves, pawn, f_pawn_moves & !promotion_row);
+        into_moves(&mut moves, pawn, f_pawn_attacks & !promotion_row);
 
-        for en_passant_move in filter(color, pawn, en_passant_moves, board) {
+        for en_passant_move in f_en_passant_moves {
             moves.push(Move::en_passant(pawn, en_passant_move));
+        }
+
+        for promotion_move in (f_pawn_moves | f_pawn_attacks) & promotion_row {
+            moves.push(Move::promotion(pawn, promotion_move));
         }
     }
 
@@ -128,7 +138,7 @@ pub fn get_move_mask_from(color: Color, from: Coord, board: &Board) -> BitBoard 
         Some(super::PieceType::Pawn) => {
             let moves = get_pawn_moves(color, from, board);
             let attacks = get_pawn_attacks(color, from);
-            let en_passant_move = get_en_passant_move(from, board);
+            let en_passant_move = get_en_passant_move(color, from, board);
             let pawn_moves = moves | (attacks & board.side(color.invert()).all()) | en_passant_move;
 
             filter(color, from, pawn_moves, board)
@@ -186,13 +196,18 @@ pub fn get_pawn_attacks(color: Color, from: Coord) -> BitBoard {
     return attacks[from.offset()];
 }
 
-fn get_en_passant_move(from: Coord, board: &Board) -> BitBoard {
+fn get_en_passant_move(color: Color, from: Coord, board: &Board) -> BitBoard {
+    let direction = match color {
+        Color::White => 1,
+        Color::Black => -1
+    };
+
     let mut moves = BitBoard::new(0);
 
     if let Some(en_passant_square) = board.en_passant_square() {
         let distance = from.distance(en_passant_square);
 
-        if distance == (1, 1) || distance == (-1, 1) || distance == (1, -1) || distance == (-1, -1) {
+        if distance == (1, direction) || distance == (-1, direction) {
             moves.set(en_passant_square);
         }
     }
@@ -302,6 +317,7 @@ pub struct Move {
     pub to: Coord,
     pub castling: bool,
     pub en_passant: bool,
+    pub promotion: bool,
 }
 
 impl Move {
@@ -311,6 +327,7 @@ impl Move {
             to,
             castling: false,
             en_passant: false,
+            promotion: false,
         }
     }
 
@@ -320,6 +337,7 @@ impl Move {
             to,
             castling: true,
             en_passant: false,
+            promotion: false,
         }
     }
 
@@ -329,12 +347,23 @@ impl Move {
             to,
             castling: false,
             en_passant: true,
+            promotion: false,
+        }
+    }
+
+    pub fn promotion(from: Coord, to: Coord) -> Self {
+        Move {
+            from,
+            to,
+            castling: false,
+            en_passant: false,
+            promotion: true,
         }
     }
 }
 
 impl Display for Move {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}{}", self.from, self.to)
+        write!(f, "{}{}{}", self.from, self.to, if self.promotion { "q" } else { "" })
     }
 }
