@@ -905,6 +905,10 @@ mod tests {
     }
 
     const CPW_POSITION_2: &str = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -";
+    const CPW_POSITION_3: &str = "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - -";
+    const CPW_POSITION_4: &str = "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1";
+    const CPW_POSITION_5: &str = "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8";
+    const CPW_POSITION_6: &str = "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10";
 
     #[test]
     fn cpw_position_2_depth_1() {
@@ -921,10 +925,10 @@ mod tests {
         test_move_count_fen(CPW_POSITION_2, 3, 97862);
     }
 
-    // #[test]
-    // fn cpw_position_2_depth_4() {
-    //     test_move_count_fen(CPW_POSITION_2, 4, 4085603);
-    // }
+    #[test]
+    fn cpw_position_2_depth_4() {
+        test_move_count_fen(CPW_POSITION_2, 4, 4085603);
+    }
 
     #[test]
     fn cpw_position_2_a2a4_depth_1() {
@@ -986,6 +990,96 @@ mod tests {
         test_move_count_fen_moves(CPW_POSITION_2, vec![("e5", "f7"), ("a6", "b5"), ("a2", "a3")], 1, 47);
     }
 
+    #[test]
+    fn cpw_position_2_f3f6_depth_3() {
+        test_move_count_fen_moves(CPW_POSITION_2, vec![("f3", "f6")], 3, 77838);
+    }
+
+    #[test]
+    fn cpw_position_2_f3f6_e8d8_depth_2() {
+        test_move_count_fen_moves(CPW_POSITION_2, vec![("f3", "f6"), ("e8", "d8")], 2, 1777);
+    }
+
+    #[test]
+    fn cpw_position_3_depth_1() {
+        test_move_count_fen(CPW_POSITION_3, 1, 14);
+    }
+
+    #[test]
+    fn cpw_position_3_depth_2() {
+        test_move_count_fen(CPW_POSITION_3, 2, 191);
+    }
+
+    #[test]
+    fn cpw_position_3_depth_3() {
+        test_move_count_fen(CPW_POSITION_3, 3, 2812);
+    }
+
+    #[test]
+    fn cpw_position_3_depth_4() {
+        test_move_count_fen(CPW_POSITION_3, 4, 43238);
+    }
+
+    #[test]
+    fn cpw_position_4_depth_1() {
+        test_move_count_fen(CPW_POSITION_4, 1, 6);
+    }
+
+    #[test]
+    fn cpw_position_4_depth_2() {
+        test_move_count_fen(CPW_POSITION_4, 2, 264);
+    }
+
+    #[test]
+    fn cpw_position_4_depth_3() {
+        test_move_count_fen(CPW_POSITION_4, 3, 9467);
+    }
+
+    #[test]
+    fn cpw_position_4_depth_4() {
+        test_move_count_fen(CPW_POSITION_4, 4, 422333);
+    }
+
+    #[test]
+    fn cpw_position_5_depth_1() {
+        test_move_count_fen(CPW_POSITION_5, 1, 44);
+    }
+
+    #[test]
+    fn cpw_position_5_depth_2() {
+        test_move_count_fen(CPW_POSITION_5, 2, 1486);
+    }
+
+    #[test]
+    fn cpw_position_5_depth_3() {
+        test_move_count_fen(CPW_POSITION_5, 3, 62379);
+    }
+
+    #[test]
+    fn cpw_position_5_depth_4() {
+        test_move_count_fen(CPW_POSITION_5, 4, 2103487);
+    }
+
+    #[test]
+    fn cpw_position_6_depth_1() {
+        test_move_count_fen(CPW_POSITION_6, 1, 46);
+    }
+
+    #[test]
+    fn cpw_position_6_depth_2() {
+        test_move_count_fen(CPW_POSITION_6, 2, 2079);
+    }
+
+    #[test]
+    fn cpw_position_6_depth_3() {
+        test_move_count_fen(CPW_POSITION_6, 3, 89890);
+    }
+
+    #[test]
+    fn cpw_position_6_depth_4() {
+        test_move_count_fen(CPW_POSITION_6, 4, 3894594);
+    }
+
     fn test_move_count_fen_moves(fen: &str, moves: Vec<(&str, &str)>, depth: usize, expected_move_count: u128) {
         let mut board = Board::from_fen(fen).unwrap();
         test_move_count_moves(&mut board, moves, depth, expected_move_count);
@@ -1007,8 +1101,6 @@ mod tests {
 
         let start = board.clone();
         let count = test_move_count(depth, board, true);
-
-        board.last_moves.clear();
 
         if start != *board {
             eprintln!("expected board to return to its original state");
