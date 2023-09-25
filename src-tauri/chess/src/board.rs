@@ -157,6 +157,7 @@ impl BoardSide {
         if let Some(piece_type) = self.lookup(coord) {
             self.get_bitboard(piece_type).unset(coord);
             self.all.unset(coord);
+            self.lookup[coord.offset()] = None;
         }
     }
 
@@ -168,6 +169,8 @@ impl BoardSide {
 
             self.get_bitboard(piece_type).unset(coord);
             self.all.unset(coord);
+
+            self.lookup[coord.offset()] = None;
 
             return Ok(piece_type);
         }
@@ -187,6 +190,8 @@ impl BoardSide {
 
             self.get_bitboard(piece_type).swap(from, to);
             self.all.swap(from, to);
+
+            self.lookup[from.offset()] = None;
             self.lookup[to.offset()] = Some(piece_type);
 
             return Some(piece_type);
