@@ -180,14 +180,6 @@ impl BoardSide {
 
     fn mv(&mut self, from: Coord, to: Coord) -> Option<PieceType> {
         if let Some(piece_type) = self.lookup[from.offset()] {
-            match piece_type {
-                PieceType::King => {
-                    self.castling_rights.queenside = false;
-                    self.castling_rights.kingside = false;
-                }
-                _ => {}
-            };
-
             self.get_bitboard(piece_type).swap(from, to);
             self.all.swap(from, to);
 
@@ -431,7 +423,7 @@ impl Board {
         let piece_type = self.mv(mv.from, mv.to).ok_or(MoveErr::NoPieceAt(mv.from))?;
 
         self.exec_castling(&mv);
-        self.set_castling_rights(&mv);
+        self.set_castling_rights(&mv, piece_type);
 
         self.exec_promotion(&mv);
         self.exec_en_passant(&mv);
@@ -509,7 +501,12 @@ impl Board {
         return Ok(());
     }
 
-    fn set_castling_rights(&mut self, mv: &Move) {
+    fn set_castling_rights(&mut self, mv: &Move, piece_type: PieceType) {
+        if piece_type == PieceType::King {
+            self.turning_side_mut().castling_rights.queenside = false;
+            self.turning_side_mut().castling_rights.kingside = false;
+        }
+
         if mv.from == A1 || mv.to == A1 {
             self.white.castling_rights.queenside = false;
         }
