@@ -762,42 +762,33 @@ impl Display for Board {
 
         f.write_str("\n\n")?;
 
-        for i in (0..=7).rev() {
-            let window = self.all().0 >> ((i * 8) as u8).swap_bytes();
+        let pieces = self.pieces();
 
-            write!(f, "{} ", i + 1)?;
+        for row in (0..=7).rev() {
+            write!(f, "{} ", row + 1)?;
 
-            for w in 0..8 {
-                if window & (1 << w) == (1 << w) {
-                    let coord = Coord::from_xy(w, i);
+            for column in 0..=7 {
+                let coord = Coord::from_xy(column, row);
 
-                    if let Some(white_piece) = self.white.lookup(coord) {
-                        let c = match white_piece {
-                            PieceType::Pawn => "P",
-                            PieceType::Rook => "R",
-                            PieceType::Knight => "N",
-                            PieceType::Bishop => "B",
-                            PieceType::Queen => "Q",
-                            PieceType::King => "K",
-                        };
+                if let Some(piece) = pieces.iter().find(|p| p.coord == coord) {
+                    let c = match (piece.piece_type, piece.color) {
+                        (PieceType::Pawn, Color::White) => "P",
+                        (PieceType::Rook, Color::White) => "R",
+                        (PieceType::Knight, Color::White) => "N",
+                        (PieceType::Bishop, Color::White) => "B",
+                        (PieceType::Queen, Color::White) => "Q",
+                        (PieceType::King, Color::White) => "K",
+                        (PieceType::Pawn, Color::Black) => "p",
+                        (PieceType::Rook, Color::Black) => "r",
+                        (PieceType::Knight, Color::Black) => "n",
+                        (PieceType::Bishop, Color::Black) => "b",
+                        (PieceType::Queen, Color::Black) => "q",
+                        (PieceType::King, Color::Black) => "k",
+                    };
 
-                        write!(f, " {}", c)?;
-                    }
-
-                    if let Some(black_piece) = self.black.lookup(coord) {
-                        let c = match black_piece {
-                            PieceType::Pawn => "p",
-                            PieceType::Rook => "r",
-                            PieceType::Knight => "n",
-                            PieceType::Bishop => "b",
-                            PieceType::Queen => "q",
-                            PieceType::King => "k",
-                        };
-
-                        write!(f, " {}", c)?;
-                    }
+                    write!(f, " {}", c)?;
                 } else {
-                    f.write_str(" .")?
+                    f.write_str(" .")?;
                 }
             }
 
