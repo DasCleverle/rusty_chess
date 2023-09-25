@@ -107,7 +107,6 @@ pub fn get_attacked_squares(color: Color, board: &Board) -> BitBoard {
 
     for pawn in side.pawns() {
         attacked_squares |= get_pawn_attacks(color, pawn);
-        attacked_squares |= get_en_passant_move(color, pawn, board);
     }
 
     attacked_squares |= KING_MOVE_MAP[side.king_coord().offset()];
@@ -160,7 +159,11 @@ fn get_bishop_moves(color: Color, from: Coord, board: &Board, blockers: &BitBoar
 }
 
 fn get_queen_moves(color: Color, from: Coord, board: &Board, blockers: &BitBoard) -> BitBoard {
-    get_rook_moves(color, from, board, blockers) | get_bishop_moves(color, from, board, blockers)
+    let friendly_pieces = board.side(color).all();
+    let moves = sliding::get_rook_move_mask(from, &blockers, &friendly_pieces)
+              | sliding::get_bishop_move_mask(from, &blockers, &friendly_pieces);
+
+    return filter(color, from, moves, board);
 }
 
 fn get_pawn_moves(color: Color, from: Coord, board: &Board) -> BitBoard {
@@ -205,7 +208,15 @@ fn get_en_passant_move(color: Color, from: Coord, board: &Board) -> BitBoard {
         let distance = from.distance(en_passant_square);
 
         if distance == (1, direction) || distance == (-1, direction) {
-            moves.set(en_passant_square);
+            let mut test_board = board.clone();
+
+            if let Ok(()) = test_board.exec_move(&Move::en_passant(from, en_passant_square)) {
+                test_board.update_attack_data();
+
+                if !test_board.side(color).checked() {
+                    moves.set(en_passant_square);
+                }
+            }
         }
     }
 
@@ -291,12 +302,11 @@ fn filter(color: Color, from: Coord, moves: BitBoard, board: &Board) -> BitBoard
     if board.side(color).checked() {
         moves &= board.side(color).check_targets();
     }
-    else {
-        for pin_ray in pin_rays {
-            if pin_ray.is_set(from) {
-                moves &= pin_ray;
-                break;
-            }
+
+    for pin_ray in pin_rays {
+        if pin_ray.is_set(from) {
+            moves &= pin_ray;
+            break;
         }
     }
 
