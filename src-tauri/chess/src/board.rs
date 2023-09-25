@@ -565,7 +565,7 @@ impl Board {
         let side = self.turning_side_mut();
 
         side.unset(mv.to);
-        side.set(mv.to, PieceType::Queen);
+        side.set(mv.to, mv.promote_to);
     }
 
     fn exec_en_passant(&mut self, mv: &Move) {
@@ -1017,25 +1017,35 @@ mod tests {
         let mut count: u128 = 0;
 
         for mv in moves {
-            board.exec_move(&mv).unwrap();
+            if mv.promotion {
+                let to_rook = { let mut mv = mv.clone(); mv.promote_to = PieceType::Rook; mv };
+                let to_bishop = { let mut mv = mv.clone(); mv.promote_to = PieceType::Bishop; mv };
+                let to_knight = { let mut mv = mv.clone(); mv.promote_to = PieceType::Knight; mv };
+                let to_queen = { let mut mv = mv.clone(); mv.promote_to = PieceType::Queen; mv };
 
-            let c = if depth - 1 > 0 {
-                test_move_count(depth - 1, board, false)
-            } else if mv.promotion {
-                4
-            } else {
-                1
-            };
-
-            count += c;
-
-            if log {
-                println!("{mv}: {c}");
+                test_move_count_iter(&mut count, board, &to_rook, depth, log);
+                test_move_count_iter(&mut count, board, &to_bishop, depth, log);
+                test_move_count_iter(&mut count, board, &to_knight, depth, log);
+                test_move_count_iter(&mut count, board, &to_queen, depth, log);
             }
-
-            board.undo_move().unwrap();
+            else {
+                test_move_count_iter(&mut count, board, &mv, depth, log);
+            }
         }
 
         return count;
+    }
+
+    fn test_move_count_iter(count: &mut u128, board: &mut Board, mv: &Move, depth: usize, log: bool) {
+        board.exec_move(&mv).unwrap();
+
+        let c = test_move_count(depth - 1, board, false);
+        *count += c;
+
+        if log {
+            println!("{mv}: {c}");
+        }
+
+        board.undo_move().unwrap();
     }
 }

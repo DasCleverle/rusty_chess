@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 
 use super::Coord;
 
@@ -17,7 +17,7 @@ impl Color {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, strum_macros::IntoStaticStr, Serialize)]
+#[derive(Debug, Copy, Clone, PartialEq, strum_macros::IntoStaticStr, Serialize, Deserialize)]
 pub enum PieceType {
     Pawn,
     Rook,

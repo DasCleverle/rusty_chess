@@ -11,6 +11,7 @@ use std::fmt::Display;
 
 use serde::{Deserialize, Serialize};
 
+use crate::PieceType;
 use crate::{bitboard::BitBoard, Board, Color, Coord};
 use lookup::*;
 
@@ -315,6 +316,7 @@ pub struct Move {
     pub castling: bool,
     pub en_passant: bool,
     pub promotion: bool,
+    pub promote_to: PieceType
 }
 
 impl Move {
@@ -325,6 +327,7 @@ impl Move {
             castling: false,
             en_passant: false,
             promotion: false,
+            promote_to: PieceType::Queen,
         }
     }
 
@@ -335,6 +338,7 @@ impl Move {
             castling: true,
             en_passant: false,
             promotion: false,
+            promote_to: PieceType::Queen,
         }
     }
 
@@ -345,6 +349,7 @@ impl Move {
             castling: false,
             en_passant: true,
             promotion: false,
+            promote_to: PieceType::Queen,
         }
     }
 
@@ -355,12 +360,26 @@ impl Move {
             castling: false,
             en_passant: false,
             promotion: true,
+            promote_to: PieceType::Queen,
         }
     }
 }
 
 impl Display for Move {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}{}{}", self.from, self.to, if self.promotion { "q" } else { "" })
+        let promotion_piece = if self.promotion {
+            match self.promote_to {
+                PieceType::Rook => "r",
+                PieceType::Knight => "n",
+                PieceType::Bishop => "b",
+                PieceType::Queen => "q",
+                _ => ""
+            }
+        }
+        else {
+            ""
+        };
+
+        write!(f, "{}{}{}", self.from, self.to, promotion_piece)
     }
 }
