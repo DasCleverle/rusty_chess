@@ -2,8 +2,8 @@ use crate::{BitBoard, Coord};
 
 pub const KING_MOVES: [(isize, isize); 8] = [(-1, 0), (-1, 1), (0, 1), (1, 1), (1, 0), (1, -1), (0, -1), (-1, -1)];
 
-pub const WHITE_KING: Coord = Coord { offset: 4 };
-pub const BLACK_KING: Coord = Coord { offset: 60 };
+pub const WHITE_KING: Coord = Coord(4);
+pub const BLACK_KING: Coord = Coord(60);
 
 pub const WHITE_QUEENSIDE_ROOK: BitBoard = BitBoard(1);
 pub const WHITE_KINGSIDE_ROOK: BitBoard = BitBoard(128);

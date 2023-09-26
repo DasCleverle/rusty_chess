@@ -53,40 +53,20 @@ impl BitBoard {
     }
 }
 
-pub struct BitBoardIter {
-    value: u64,
-    offset: usize,
-}
+pub struct BitBoardIter(u64);
 
 impl Iterator for BitBoardIter {
     type Item = Coord;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.value == 0 {
+        if self.0 == 0 {
             return None;
         }
 
-        if self.offset == 64 {
-            return None;
-        }
+        let trailing_zeroes = self.0.trailing_zeros() as usize;
+        let coord = Coord::from_offset(trailing_zeroes);
 
-        let trailing_zeroes = self.value.trailing_zeros() as usize;
-
-        if trailing_zeroes == 64 {
-            return None;
-        }
-
-        let coord = Coord::from_offset(self.offset + trailing_zeroes);
-
-        if trailing_zeroes == 63 {
-            self.value = 0;
-            self.offset = 64;
-
-            return Some(coord);
-        }
-
-        self.value = self.value >> trailing_zeroes + 1;
-        self.offset += trailing_zeroes + 1;
+        self.0 &= self.0 - 1;
 
         return Some(coord);
     }
@@ -97,10 +77,7 @@ impl IntoIterator for BitBoard {
     type IntoIter = BitBoardIter;
 
     fn into_iter(self) -> Self::IntoIter {
-        BitBoardIter {
-            value: self.0,
-            offset: 0,
-        }
+        BitBoardIter(self.0)
     }
 }
 
@@ -109,7 +86,7 @@ impl IntoIterator for &BitBoard {
     type IntoIter = BitBoardIter;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.to_owned().into_iter()
+        BitBoardIter(self.0)
     }
 }
 

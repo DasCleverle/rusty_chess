@@ -4,6 +4,7 @@ use crate::{
     Coord,
 };
 
+#[inline(always)]
 pub fn get_rook_move_mask(from: Coord, blockers: &BitBoard, friendly_pieces: &BitBoard) -> BitBoard {
     let offset = from.offset();
     let (magic, shift) = ROOK_MAGICS[offset];
@@ -12,6 +13,7 @@ pub fn get_rook_move_mask(from: Coord, blockers: &BitBoard, friendly_pieces: &Bi
     return BLOCKED_ROOK_MOVES[offset][magic_index] & !friendly_pieces;
 }
 
+#[inline(always)]
 pub fn get_bishop_move_mask(from: Coord, blockers: &BitBoard, friendly_pieces: &BitBoard) -> BitBoard {
     let offset = from.offset();
     let (magic, shift) = BISHOP_MAGICS[offset];

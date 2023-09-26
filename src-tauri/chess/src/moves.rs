@@ -48,21 +48,24 @@ pub fn get_moves(color: Color, board: &Board) -> Vec<Move> {
 
         let pawn_moves = get_pawn_moves(color, pawn, board);
         let pawn_attacks = get_pawn_attacks(color, pawn) & opponent_side.all();
-        let en_passant_moves = get_en_passant_move(color, pawn, board);
 
         let f_pawn_moves = filter(color, pawn, pawn_moves, board);
         let f_pawn_attacks = filter(color, pawn, pawn_attacks, board);
-        let f_en_passant_moves = filter(color, pawn, en_passant_moves, board);
 
         into_moves(&mut moves, pawn, f_pawn_moves & !promotion_row);
         into_moves(&mut moves, pawn, f_pawn_attacks & !promotion_row);
 
-        for en_passant_move in f_en_passant_moves {
-            moves.push(Move::en_passant(pawn, en_passant_move));
-        }
-
         for promotion_move in (f_pawn_moves | f_pawn_attacks) & promotion_row {
             moves.push(Move::promotion(pawn, promotion_move));
+        }
+
+        if let Some(en_passant_square) = board.en_passant_square() {
+            let en_passant_moves = get_en_passant_move(color, pawn, en_passant_square, board);
+            let f_en_passant_moves = filter(color, pawn, en_passant_moves, board);
+
+            for en_passant_move in f_en_passant_moves {
+                moves.push(Move::en_passant(pawn, en_passant_move));
+            }
         }
     }
 
@@ -134,8 +137,11 @@ pub fn get_move_mask_from(color: Color, from: Coord, board: &Board) -> BitBoard 
         Some(super::PieceType::Pawn) => {
             let moves = get_pawn_moves(color, from, board);
             let attacks = get_pawn_attacks(color, from);
-            let en_passant_move = get_en_passant_move(color, from, board);
-            let pawn_moves = moves | (attacks & board.side(color.invert()).all()) | en_passant_move;
+            let mut pawn_moves = moves | (attacks & board.side(color.invert()).all());
+
+            if let Some(en_passant_square) = board.en_passant_square() {
+                pawn_moves |= get_en_passant_move(color, from, en_passant_square, board);
+            }
 
             filter(color, from, pawn_moves, board)
         }
@@ -160,8 +166,7 @@ fn get_bishop_moves(color: Color, from: Coord, board: &Board, blockers: &BitBoar
 
 fn get_queen_moves(color: Color, from: Coord, board: &Board, blockers: &BitBoard) -> BitBoard {
     let friendly_pieces = board.side(color).all();
-    let moves = sliding::get_rook_move_mask(from, &blockers, &friendly_pieces)
-              | sliding::get_bishop_move_mask(from, &blockers, &friendly_pieces);
+    let moves = sliding::get_rook_move_mask(from, &blockers, &friendly_pieces) | sliding::get_bishop_move_mask(from, &blockers, &friendly_pieces);
 
     return filter(color, from, moves, board);
 }
@@ -196,27 +201,26 @@ pub fn get_pawn_attacks(color: Color, from: Coord) -> BitBoard {
     return attacks[from.offset()];
 }
 
-fn get_en_passant_move(color: Color, from: Coord, board: &Board) -> BitBoard {
+fn get_en_passant_move(color: Color, from: Coord, en_passant_square: Coord, board: &Board) -> BitBoard {
+    let mut moves = BitBoard::new(0);
     let direction = match color {
         Color::White => 1,
-        Color::Black => -1
+        Color::Black => -1,
     };
 
-    let mut moves = BitBoard::new(0);
+    let distance = from.distance(en_passant_square);
 
-    if let Some(en_passant_square) = board.en_passant_square() {
-        let distance = from.distance(en_passant_square);
+    if distance != (1, direction) && distance != (-1, direction) {
+        return moves;
+    }
 
-        if distance == (1, direction) || distance == (-1, direction) {
-            let mut test_board = board.clone();
+    let mut test_board = board.clone();
 
-            if let Ok(()) = test_board.exec_move(&Move::en_passant(from, en_passant_square)) {
-                test_board.update_attack_data();
+    if let Ok(()) = test_board.exec_move(&Move::en_passant(from, en_passant_square)) {
+        test_board.update_attack_data();
 
-                if !test_board.side(color).checked() {
-                    moves.set(en_passant_square);
-                }
-            }
+        if !test_board.side(color).checked() {
+            moves.set(en_passant_square);
         }
     }
 
@@ -326,7 +330,7 @@ pub struct Move {
     pub castling: bool,
     pub en_passant: bool,
     pub promotion: bool,
-    pub promote_to: PieceType
+    pub promote_to: PieceType,
 }
 
 impl Move {
@@ -383,10 +387,9 @@ impl Display for Move {
                 PieceType::Knight => "n",
                 PieceType::Bishop => "b",
                 PieceType::Queen => "q",
-                _ => ""
+                _ => "",
             }
-        }
-        else {
+        } else {
             ""
         };
 

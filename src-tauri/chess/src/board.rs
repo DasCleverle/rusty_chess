@@ -8,10 +8,10 @@ use crate::{
     moves, Color, Coord, Move, Piece, PieceType,
 };
 
-const A1: Coord = Coord { offset: 0 };
-const H1: Coord = Coord { offset: 7 };
-const A8: Coord = Coord { offset: 56 };
-const H8: Coord = Coord { offset: 63 };
+const A1: Coord = Coord(0);
+const H1: Coord = Coord(7);
+const A8: Coord = Coord(56);
+const H8: Coord = Coord(63);
 
 #[derive(Debug, thiserror::Error)]
 pub enum MoveErr {
@@ -1126,17 +1126,32 @@ mod tests {
 
         for mv in moves {
             if mv.promotion {
-                let to_rook = { let mut mv = mv.clone(); mv.promote_to = PieceType::Rook; mv };
-                let to_bishop = { let mut mv = mv.clone(); mv.promote_to = PieceType::Bishop; mv };
-                let to_knight = { let mut mv = mv.clone(); mv.promote_to = PieceType::Knight; mv };
-                let to_queen = { let mut mv = mv.clone(); mv.promote_to = PieceType::Queen; mv };
+                let to_rook = {
+                    let mut mv = mv.clone();
+                    mv.promote_to = PieceType::Rook;
+                    mv
+                };
+                let to_bishop = {
+                    let mut mv = mv.clone();
+                    mv.promote_to = PieceType::Bishop;
+                    mv
+                };
+                let to_knight = {
+                    let mut mv = mv.clone();
+                    mv.promote_to = PieceType::Knight;
+                    mv
+                };
+                let to_queen = {
+                    let mut mv = mv.clone();
+                    mv.promote_to = PieceType::Queen;
+                    mv
+                };
 
                 test_move_count_iter(&mut count, board, &to_rook, depth, log);
                 test_move_count_iter(&mut count, board, &to_bishop, depth, log);
                 test_move_count_iter(&mut count, board, &to_knight, depth, log);
                 test_move_count_iter(&mut count, board, &to_queen, depth, log);
-            }
-            else {
+            } else {
                 test_move_count_iter(&mut count, board, &mv, depth, log);
             }
         }

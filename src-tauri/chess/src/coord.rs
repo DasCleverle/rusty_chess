@@ -79,20 +79,18 @@ pub enum Direction {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
-pub struct Coord {
-    pub offset: isize,
-}
+pub struct Coord(pub usize);
 
 impl Coord {
     pub fn new(column: char, row: u8) -> Self {
         let column = column as u8 - b'a';
         let row = row - 1;
 
-        Self { offset: (row * 8 + column) as isize }
+        Self((row * 8 + column) as usize)
     }
 
     pub fn from_xy(x: u8, y: u8) -> Self {
-        Self { offset: (y * 8 + x) as isize }
+        Self((y * 8 + x) as usize)
     }
 
     pub fn from_str(str: &str) -> Option<Self> {
@@ -112,11 +110,11 @@ impl Coord {
     }
 
     pub fn from_offset(offset: usize) -> Self {
-        Self { offset: offset as isize }
+        Self(offset)
     }
 
     pub fn offset(&self) -> usize {
-        self.offset as usize
+        self.0
     }
 
     pub fn column(&self) -> char {
@@ -124,16 +122,16 @@ impl Coord {
     }
 
     pub fn column_index(&self) -> u8 {
-        (self.offset % 8) as u8
+        (self.0 % 8) as u8
     }
 
     pub fn row(&self) -> u8 {
-        let row = self.offset / 8 + 1;
+        let row = self.0 / 8 + 1;
         return row as u8;
     }
 
     pub fn row_index(&self) -> u8 {
-        let row = self.offset / 8;
+        let row = self.0 / 8;
         return row as u8;
     }
 
@@ -146,7 +144,7 @@ impl Coord {
 
     pub fn mv_mut(&mut self, row: isize, column: isize) -> bool {
         if let Some(offset) = self.get_move_offset(row, column) {
-            self.offset = self.offset as isize + offset;
+            self.0 = ((self.0 as isize) + offset) as usize;
             return true;
         }
 
@@ -155,7 +153,7 @@ impl Coord {
 
     pub fn mv(&self, row: isize, column: isize) -> Option<Self> {
         let offset = self.get_move_offset(row, column)?;
-        return Some(Coord { offset: self.offset + offset });
+        return Some(Coord(((self.0 as isize) + offset) as usize));
     }
 
     fn get_move_offset(&self, row: isize, column: isize) -> Option<isize> {
@@ -167,7 +165,7 @@ impl Coord {
 
         if row != 0 {
             let row_dir = if row < 0 { Direction::West } else { Direction::East } as usize;
-            let row_dist = DISTANCES_TO_EDGE[self.offset()][row_dir];
+            let row_dist = DISTANCES_TO_EDGE[self.0][row_dir];
 
             if row.abs() > row_dist {
                 return None;
@@ -178,7 +176,7 @@ impl Coord {
 
         if column != 0 {
             let col_dir = if column < 0 { Direction::South } else { Direction::North } as usize;
-            let col_dist = DISTANCES_TO_EDGE[self.offset()][col_dir];
+            let col_dist = DISTANCES_TO_EDGE[self.0][col_dir];
 
             if column.abs() > col_dist {
                 return None;
@@ -242,31 +240,31 @@ mod tests {
     #[test]
     fn offset_test() {
         let a1 = Coord::new('a', 1);
-        assert_eq!(0, a1.offset, "a1");
+        assert_eq!(0, a1.0, "a1");
 
         let h8 = Coord::new('h', 8);
-        assert_eq!(63, h8.offset, "h8");
+        assert_eq!(63, h8.0, "h8");
 
         let a2 = Coord::new('a', 2);
-        assert_eq!(8, a2.offset, "a2");
+        assert_eq!(8, a2.0, "a2");
 
         let f3 = Coord::new('f', 3);
-        assert_eq!(21, f3.offset, "f3");
+        assert_eq!(21, f3.0, "f3");
     }
 
     #[test]
     fn from_str_test() {
         let a1 = Coord::from_str("a1").unwrap();
-        assert_eq!(0, a1.offset, "a1");
+        assert_eq!(0, a1.0, "a1");
 
         let h8 = Coord::from_str("h8").unwrap();
-        assert_eq!(63, h8.offset, "h8");
+        assert_eq!(63, h8.0, "h8");
 
         let a2 = Coord::from_str("a2").unwrap();
-        assert_eq!(8, a2.offset, "a2");
+        assert_eq!(8, a2.0, "a2");
 
         let f3 = Coord::from_str("f3").unwrap();
-        assert_eq!(21, f3.offset, "f3");
+        assert_eq!(21, f3.0, "f3");
 
         let invalid = Coord::from_str("u9");
         assert_eq!(None, invalid, "invalid");
@@ -306,7 +304,6 @@ mod tests {
 
         let f3 = Coord::new('f', 3);
         assert_eq!('f', f3.column(), "f3");
-
     }
 
     #[test]
@@ -324,7 +321,12 @@ mod tests {
         assert_eq!(63, seven_north.offset(), "h1 -> h8");
 
         let mut one_north_over_edge = Coord::new('g', 8);
-        assert_eq!(false, one_north_over_edge.mv_mut(0, 1), "one north over edge {}", one_north_over_edge.offset());
+        assert_eq!(
+            false,
+            one_north_over_edge.mv_mut(0, 1),
+            "one north over edge {}",
+            one_north_over_edge.offset()
+        );
     }
 
     #[test]
@@ -343,10 +345,20 @@ mod tests {
 
         let mut one_north_east_at_right_edge = Coord::new('h', 4);
         println!("{}", one_north_east_at_right_edge.offset());
-        assert_eq!(false, one_north_east_at_right_edge.mv_mut(1, 1), "one north east at right edge {}", one_north_east_at_right_edge.offset());
+        assert_eq!(
+            false,
+            one_north_east_at_right_edge.mv_mut(1, 1),
+            "one north east at right edge {}",
+            one_north_east_at_right_edge.offset()
+        );
 
         let mut one_north_east_at_north_east_corner = Coord::new('h', 4);
-        assert_eq!(false, one_north_east_at_north_east_corner.mv_mut(1, 1), "one north east at north east corner {}", one_north_east_at_north_east_corner.offset());
+        assert_eq!(
+            false,
+            one_north_east_at_north_east_corner.mv_mut(1, 1),
+            "one north east at north east corner {}",
+            one_north_east_at_north_east_corner.offset()
+        );
     }
 
     #[test]
@@ -364,7 +376,12 @@ mod tests {
         assert_eq!(31, seven_east.offset(), "a4 -> h4");
 
         let mut one_east_over_edge = Coord::new('h', 8);
-        assert_eq!(false, one_east_over_edge.mv_mut(1, 0), "one east over edge {}", one_east_over_edge.offset());
+        assert_eq!(
+            false,
+            one_east_over_edge.mv_mut(1, 0),
+            "one east over edge {}",
+            one_east_over_edge.offset()
+        );
     }
 
     #[test]
@@ -382,7 +399,12 @@ mod tests {
         assert_eq!(7, seven_south.offset(), "h8 -> h1");
 
         let mut one_south_over_edge = Coord::new('g', 1);
-        assert_eq!(false, one_south_over_edge.mv_mut(0, -1), "one south over edge {}", one_south_over_edge.offset());
+        assert_eq!(
+            false,
+            one_south_over_edge.mv_mut(0, -1),
+            "one south over edge {}",
+            one_south_over_edge.offset()
+        );
     }
 
     #[test]
@@ -400,7 +422,11 @@ mod tests {
         assert_eq!(24, seven_west.offset(), "h4 -> a4");
 
         let mut one_west_over_edge = Coord::new('a', 8);
-        assert_eq!(false, one_west_over_edge.mv_mut(-1, 0), "one west over edge {}", one_west_over_edge.offset());
+        assert_eq!(
+            false,
+            one_west_over_edge.mv_mut(-1, 0),
+            "one west over edge {}",
+            one_west_over_edge.offset()
+        );
     }
-
 }
