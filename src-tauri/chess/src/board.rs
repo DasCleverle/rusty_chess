@@ -49,7 +49,8 @@ pub struct BoardSide {
     attacked_squares: BitBoard,
 
     check_targets: BitBoard,
-    pin_rays: Vec<BitBoard>,
+    pin_rays: [BitBoard; 13],
+    pin_rays_count: usize,
 
     castling_rights: CastlingRights,
 }
@@ -70,7 +71,8 @@ impl BoardSide {
             attacked_squares: Default::default(),
 
             check_targets: Default::default(),
-            pin_rays: Default::default(),
+            pin_rays: [BitBoard::new(0); 13],
+            pin_rays_count: 0,
 
             castling_rights: CastlingRights { queenside: true, kingside: true },
         }
@@ -116,8 +118,8 @@ impl BoardSide {
         return &self.check_targets;
     }
 
-    pub fn pin_rays(&self) -> &Vec<BitBoard> {
-        return &self.pin_rays;
+    pub fn pin_rays(&self) -> &[BitBoard] {
+        return &self.pin_rays[0..self.pin_rays_count];
     }
 
     pub fn can_castle_queenside(&self) -> bool {
@@ -702,19 +704,20 @@ impl Board {
         };
 
         let king = side.king_coord();
-
-        side.pin_rays.clear();
+        let mut i = 0;
 
         for queen in opponent_side.queens() {
             if let Some(ray) = moves::ORTHOGONAL_PIN_RAYS[king.offset()][queen.offset()] {
                 if Self::is_pinning(side, opponent_side, queen, &ray) {
-                    side.pin_rays.push(ray);
+                    side.pin_rays[i] = ray;
+                    i += 1;
                 }
             }
 
             if let Some(ray) = moves::DIAGONAL_PIN_RAYS[king.offset()][queen.offset()] {
                 if Self::is_pinning(side, opponent_side, queen, &ray) {
-                    side.pin_rays.push(ray);
+                    side.pin_rays[i] = ray;
+                    i += 1;
                 }
             }
         }
@@ -722,7 +725,8 @@ impl Board {
         for rook in opponent_side.rooks() {
             if let Some(ray) = moves::ORTHOGONAL_PIN_RAYS[king.offset()][rook.offset()] {
                 if Self::is_pinning(side, opponent_side, rook, &ray) {
-                    side.pin_rays.push(ray);
+                    side.pin_rays[i] = ray;
+                    i += 1;
                 }
             }
         }
@@ -730,10 +734,13 @@ impl Board {
         for bishop in opponent_side.bishops() {
             if let Some(ray) = moves::DIAGONAL_PIN_RAYS[king.offset()][bishop.offset()] {
                 if Self::is_pinning(side, opponent_side, bishop, &ray) {
-                    side.pin_rays.push(ray);
+                    side.pin_rays[i] = ray;
+                    i += 1;
                 }
             }
         }
+
+        side.pin_rays_count = i;
     }
 
     fn is_pinning(side: &BoardSide, opponent_side: &BoardSide, from: Coord, ray: &BitBoard) -> bool {
