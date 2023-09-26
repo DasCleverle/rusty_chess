@@ -810,6 +810,7 @@ impl Display for Board {
 mod tests {
 
     use super::*;
+    use rayon::prelude::*;
 
     #[test]
     fn move_count_depth_1() {
@@ -1129,53 +1130,55 @@ mod tests {
         }
 
         let moves = super::moves::get_moves(board.turn(), &board);
-        let mut count: u128 = 0;
 
-        for mv in moves {
-            if mv.promotion {
-                let to_rook = {
-                    let mut mv = mv.clone();
-                    mv.promote_to = PieceType::Rook;
-                    mv
-                };
-                let to_bishop = {
-                    let mut mv = mv.clone();
-                    mv.promote_to = PieceType::Bishop;
-                    mv
-                };
-                let to_knight = {
-                    let mut mv = mv.clone();
-                    mv.promote_to = PieceType::Knight;
-                    mv
-                };
-                let to_queen = {
-                    let mut mv = mv.clone();
-                    mv.promote_to = PieceType::Queen;
-                    mv
-                };
-
-                test_move_count_iter(&mut count, board, &to_rook, depth, log);
-                test_move_count_iter(&mut count, board, &to_bishop, depth, log);
-                test_move_count_iter(&mut count, board, &to_knight, depth, log);
-                test_move_count_iter(&mut count, board, &to_queen, depth, log);
-            } else {
-                test_move_count_iter(&mut count, board, &mv, depth, log);
-            }
-        }
-
-        return count;
+        return moves
+            .into_par_iter()
+            .map(|mv| {
+                if mv.promotion {
+                    return [
+                        {
+                            let mut mv = mv.clone();
+                            mv.promote_to = PieceType::Rook;
+                            mv
+                        },
+                        {
+                            let mut mv = mv.clone();
+                            mv.promote_to = PieceType::Bishop;
+                            mv
+                        },
+                        {
+                            let mut mv = mv.clone();
+                            mv.promote_to = PieceType::Knight;
+                            mv
+                        },
+                        {
+                            let mut mv = mv.clone();
+                            mv.promote_to = PieceType::Queen;
+                            mv
+                        },
+                    ]
+                    .into_par_iter()
+                    .map(|pmv| {
+                        test_move_count_iter(&mut board.clone(), &pmv, depth, log)
+                    })
+                    .sum();
+                } else {
+                    return test_move_count_iter(&mut board.clone(), &mv, depth, log);
+                }
+            })
+            .sum();
     }
 
-    fn test_move_count_iter(count: &mut u128, board: &mut Board, mv: &Move, depth: usize, log: bool) {
+    fn test_move_count_iter(board: &mut Board, mv: &Move, depth: usize, log: bool) -> u128 {
         board.exec_move(&mv).unwrap();
 
         let c = test_move_count(depth - 1, board, false);
-        *count += c;
 
         if log {
             println!("{mv}: {c}");
         }
 
         board.undo_move().unwrap();
+        return c;
     }
 }

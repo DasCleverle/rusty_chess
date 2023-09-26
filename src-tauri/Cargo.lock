@@ -314,6 +314,7 @@ dependencies = [
  "anyhow",
  "criterion",
  "lazy_static",
+ "rayon",
  "serde",
  "strum",
  "strum_macros",
@@ -2157,6 +2158,7 @@ name = "profile"
 version = "0.1.0"
 dependencies = [
  "chess",
+ "rayon",
 ]
 
 [[package]]
