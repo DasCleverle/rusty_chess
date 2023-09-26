@@ -12,3 +12,10 @@ strum = "0.25.0"
 strum_macros = "0.25.2"
 anyhow = { version = "1.0.75", features = ["backtrace"] }
 lazy_static = "1.4.0"
+
+[dev-dependencies]
+criterion = "0.5.1"
+
+[[bench]]
+name = "bench"
+harness = false
