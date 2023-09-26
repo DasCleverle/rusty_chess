@@ -301,7 +301,7 @@ mod tests {
     #[test]
     fn ep_square() {
         let result = parse_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w - e3").unwrap();
-        assert_eq!(Some(Coord::new('e', 4)), result.en_passant_square);
+        assert_eq!(Some(Coord::new('e', 3)), result.en_passant_square);
     }
 
     fn assert_piece(items: &Vec<Piece>, index: &mut usize, coord: &str, piece_type: PieceType, color: Color) {
