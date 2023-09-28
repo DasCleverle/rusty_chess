@@ -23,7 +23,7 @@ pub fn get_moves(color: Color, board: &Board) -> Vec<Move> {
     let side = board.side(color);
     let opponent_side = board.side(color.invert());
 
-    let mut moves: Vec<Move> = Vec::new();
+    let mut moves: Vec<Move> = Vec::with_capacity(50);
 
     for rook in side.rooks() {
         into_moves(&mut moves, rook, get_rook_moves(color, rook, board, board.all()));
