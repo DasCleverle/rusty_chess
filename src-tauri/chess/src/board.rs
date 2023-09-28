@@ -707,14 +707,14 @@ impl Board {
         let mut i = 0;
 
         for queen in opponent_side.queens() {
-            if let Some(ray) = moves::ORTHOGONAL_PIN_RAYS[king.offset()][queen.offset()] {
+            if let Some(ray) = moves::ORTHOGONAL_PIN_RAYS[king.offset() * 64 + queen.offset()] {
                 if Self::is_pinning(side, opponent_side, queen, &ray) {
                     side.pin_rays[i] = ray;
                     i += 1;
                 }
             }
 
-            if let Some(ray) = moves::DIAGONAL_PIN_RAYS[king.offset()][queen.offset()] {
+            if let Some(ray) = moves::DIAGONAL_PIN_RAYS[king.offset() * 64 + queen.offset()] {
                 if Self::is_pinning(side, opponent_side, queen, &ray) {
                     side.pin_rays[i] = ray;
                     i += 1;
@@ -723,7 +723,7 @@ impl Board {
         }
 
         for rook in opponent_side.rooks() {
-            if let Some(ray) = moves::ORTHOGONAL_PIN_RAYS[king.offset()][rook.offset()] {
+            if let Some(ray) = moves::ORTHOGONAL_PIN_RAYS[king.offset() * 64 + rook.offset()] {
                 if Self::is_pinning(side, opponent_side, rook, &ray) {
                     side.pin_rays[i] = ray;
                     i += 1;
@@ -732,7 +732,7 @@ impl Board {
         }
 
         for bishop in opponent_side.bishops() {
-            if let Some(ray) = moves::DIAGONAL_PIN_RAYS[king.offset()][bishop.offset()] {
+            if let Some(ray) = moves::DIAGONAL_PIN_RAYS[king.offset() * 64 + bishop.offset()] {
                 if Self::is_pinning(side, opponent_side, bishop, &ray) {
                     side.pin_rays[i] = ray;
                     i += 1;
