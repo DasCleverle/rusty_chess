@@ -12,6 +12,10 @@ use std::fmt::Display;
 use serde::{Deserialize, Serialize};
 
 use crate::PieceType;
+use crate::bitboard::NORTH_EAST;
+use crate::bitboard::NORTH_WEST;
+use crate::bitboard::SOUTH_EAST;
+use crate::bitboard::SOUTH_WEST;
 use crate::{bitboard::BitBoard, Board, Color, Coord};
 use lookup::*;
 
@@ -108,10 +112,7 @@ pub fn get_attacked_squares(color: Color, board: &Board) -> BitBoard {
         attacked_squares |= KNIGHT_MOVE_MAP[knight.offset()];
     }
 
-    for pawn in side.pawns() {
-        attacked_squares |= get_pawn_attacks(color, pawn);
-    }
-
+    attacked_squares |= get_pawn_attacks_fast(color, side.pawns());
     attacked_squares |= KING_MOVE_MAP[side.king_coord().offset()];
 
     return attacked_squares;
@@ -199,6 +200,13 @@ pub fn get_pawn_attacks(color: Color, from: Coord) -> BitBoard {
     };
 
     return attacks[from.offset()];
+}
+
+pub fn get_pawn_attacks_fast(color: Color, pawns: &BitBoard) -> BitBoard {
+    match color {
+        Color::White => (pawns.push(NORTH_WEST) & !H_COLUMN) | (pawns.push(NORTH_EAST) & !A_COLUMN),
+        Color::Black => (pawns.push(SOUTH_WEST) & !H_COLUMN) | (pawns.push(SOUTH_EAST) & !A_COLUMN),
+    }
 }
 
 fn get_en_passant_move(color: Color, from: Coord, en_passant_square: Coord, board: &Board) -> BitBoard {

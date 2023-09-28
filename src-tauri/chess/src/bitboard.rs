@@ -3,6 +3,30 @@ use std::ops::{BitAnd, BitOr, BitXor, Not, BitOrAssign, BitAndAssign, Shl, Shr};
 
 use super::Coord;
 
+#[allow(dead_code)]
+pub const NORTH_WEST: i8 = 7;
+
+#[allow(dead_code)]
+pub const NORTH: i8 = 8;
+
+#[allow(dead_code)]
+pub const NORTH_EAST: i8 = 9;
+
+#[allow(dead_code)]
+pub const EAST: i8 = 1;
+
+#[allow(dead_code)]
+pub const SOUTH_EAST: i8 = -7;
+
+#[allow(dead_code)]
+pub const SOUTH: i8 = -8;
+
+#[allow(dead_code)]
+pub const SOUTH_WEST: i8 = -9;
+
+#[allow(dead_code)]
+pub const WEST: i8 = -1;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct BitBoard(pub u64);
 
@@ -50,6 +74,15 @@ impl BitBoard {
 
     pub fn trailing_zeros(&self) -> u32 {
         self.0.trailing_zeros()
+    }
+
+    pub fn push(&self, offset: i8) -> BitBoard {
+        if offset < 0 {
+            self >> -offset as usize
+        }
+        else {
+            self << offset as usize
+        }
     }
 }
 
